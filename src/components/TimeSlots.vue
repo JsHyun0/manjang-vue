@@ -16,7 +16,9 @@
 </template>
 
 <script setup lang="ts">
-import { timeSlots } from '@/lib/reservation'
+import { generateTimeSlots } from '@/lib/reservation'
+
+const timeSlots = generateTimeSlots()
 
 interface Props {
   selectedStartTime: string
