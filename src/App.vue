@@ -1,5 +1,23 @@
 <script setup lang="ts">
-// App 컴포넌트
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuth } from './lib/auth'
+const router = useRouter()
+const { isLoggedIn, userName, clearUser } = useAuth()
+
+const menuOpen = ref(false)
+
+function displayName(name: string): string {
+  // 너무 길면 축약 표시
+  if (!name) return '로그인/가입'
+  return name.length > 12 ? name.slice(0, 12) + '…' : name
+}
+
+function onLogout() {
+  clearUser()
+  menuOpen.value = false
+  router.push('/home')
+}
 </script>
 
 <template>
@@ -7,7 +25,7 @@
     <nav class="navbar">
       <div class="nav-container">
         <router-link to="/home" class="nav-logo">
-          <img alt="Logo" src="./assets/logo.svg" width="40" height="40" />
+          <!-- <img alt="Logo" src="./assets/logo.svg" width="40" height="40" /> -->
           <span>만장일치</span>
         </router-link>
 
@@ -15,7 +33,13 @@
           <router-link to="/timer" class="nav-link">타이머</router-link>
           <router-link to="/reservation" class="nav-link">예약</router-link>
           <router-link to="/record" class="nav-link">기록</router-link>
-          <router-link to="/login" class="nav-link login-btn">로그인</router-link>
+          <router-link v-if="!isLoggedIn" to="/login" class="nav-link login-btn">로그인/가입</router-link>
+          <div v-else class="nav-user">
+            <button type="button" class="nav-link user-pill" @click="menuOpen = !menuOpen">{{ displayName(userName) }}</button>
+            <div v-if="menuOpen" class="user-dropdown">
+              <button type="button" class="dropdown-item" @click="onLogout">로그아웃</button>
+            </div>
+          </div>
         </div>
       </div>
     </nav>
@@ -110,6 +134,46 @@
 .login-btn:hover {
   background: var(--secondary-blue) !important;
   color: white !important;
+}
+
+.user-pill {
+  background: var(--light-blue);
+  color: var(--primary-blue);
+  border-radius: 16px;
+  padding: 0.5rem 1rem;
+}
+
+.nav-user {
+  position: relative;
+}
+
+.user-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  padding: 0.5rem;
+  min-width: 140px;
+  z-index: 1000;
+}
+
+.dropdown-item {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #374151;
+}
+
+.dropdown-item:hover {
+  background: var(--light-blue);
+  color: var(--primary-blue);
 }
 
 .main-content {

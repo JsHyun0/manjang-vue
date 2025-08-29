@@ -26,7 +26,7 @@
 </template>
 
 <script setup lang="ts">
-import heroImage from '@/assets/logo.svg'
+import heroImage from '@/assets/logo.jpeg'
 import naverCafeLogo from '@/assets/naver_cafe.webp'
 </script>
 

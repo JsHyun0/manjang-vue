@@ -1,37 +1,40 @@
 <template>
   <div class="min-h-screen">
-    <header class="header">
+    <!-- <header class="header">
       <div class="container">
         <div class="text-center">
           <h1 class="title">동아리방 예약</h1>
           <p class="subtitle">간편하게 동아리방을 예약하세요</p>
         </div>
       </div>
-    </header>
+    </header> -->
 
     <main class="container main">
       <div class="card mb">
-        <div class="card-header">
-          <h2 class="card-title with-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-            날짜 선택
-          </h2>
-        </div>
-        <div class="card-content">
-          <input
-            class="input"
-            type="date"
-            :min="today"
-            v-model="selectedDate"
-          />
+        <div class="toolbar">
+          <div class="field">
+            <label class="label" for="date-picker">날짜 선택</label>
+            <input
+              id="date-picker"
+              class="input"
+              type="date"
+              :min="today"
+              v-model="selectedDate"
+            />
+          </div>
+          <div class="field">
+            <label class="label" for="reserver-name">이름</label>
+            <input
+              id="reserver-name"
+              class="input"
+              v-model="reservationForm.name"
+              placeholder="예약자 이름을 입력하세요"
+            />
+          </div>
         </div>
       </div>
 
       <div class="card">
-        <div class="card-header">
-          <h2 class="room-title">{{ clubRoom.name }}</h2>
-          <p class="room-desc">{{ clubRoom.location }} • 수용인원 {{ clubRoom.capacity }}명 • {{ clubRoom.features.join(', ') }}</p>
-        </div>
         <div class="card-content">
           <div class="section">
             <h3 class="section-title">예약 현황 ({{ selectedDate }})</h3>
@@ -73,16 +76,6 @@
 
           <div class="inline-form">
             <div class="form-item">
-              <label class="label" for="name-inline">이름</label>
-              <input
-                id="name-inline"
-                class="input"
-                v-model="reservationForm.name"
-                placeholder="예약자 이름을 입력하세요"
-              />
-            </div>
-
-            <div class="form-item">
               <label class="label">선택한 시간</label>
               <p class="hint" v-if="selectedTimes.length">
                 {{ selectedDate }} • {{ selectedTimes.join(', ') }} ({{ selectedTimes.length }}개)
@@ -99,16 +92,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watchEffect, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, watchEffect, onMounted, onBeforeUnmount } from 'vue'
 import { generateTimeSlots, listReservationsByDate, createReservations, type ReservationSlot } from '@/lib/reservation'
-
-const clubRoom = {
-  id: 1,
-  name: '동아리방',
-  capacity: 15,
-  features: ['WiFi', '화이트보드', '프로젝터'],
-  location: '학생회관 3층',
-}
+import { useAuth } from '@/lib/auth'
 
 const today = new Date().toISOString().split('T')[0]
 const selectedDate = ref<string>(today)
@@ -116,6 +102,19 @@ const timeSlots = generateTimeSlots()
 
 const reservations = ref<ReservationSlot[]>([])
 const reservationForm = ref<{ name: string; selectedSlots: string[] }>({ name: '', selectedSlots: [] })
+
+// 로그인 사용자 이름으로 자동 채우기 (사용자 입력은 유지)
+const { isLoggedIn, userName } = useAuth()
+onMounted(() => {
+  if (isLoggedIn.value && !reservationForm.value.name) {
+    reservationForm.value.name = userName.value
+  }
+})
+watch([isLoggedIn, userName], () => {
+  if (isLoggedIn.value && !reservationForm.value.name) {
+    reservationForm.value.name = userName.value
+  }
+})
 
 // 선택 상태 (다중/비연속 지원)
 const selectedSet = ref<Set<string>>(new Set())
@@ -214,7 +213,7 @@ const handleReservation = async () => {
     await createReservations(selectedDate.value, reservationForm.value.name, selectedTimes.value)
     await refreshReservations()
     alert('예약이 완료되었습니다.')
-    reservationForm.value = { name: '', selectedSlots: [] }
+    reservationForm.value = { name: isLoggedIn.value ? userName.value : '', selectedSlots: [] }
     selectedSet.value = new Set()
   } catch (e: any) {
     alert(e?.message || '예약 중 오류가 발생했습니다.')
@@ -256,6 +255,8 @@ watchEffect(refreshReservations)
 .card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 4px 16px rgba(74, 144, 226, 0.06); }
 .card-header { padding: 1rem 1rem 0.5rem; }
 .card-content { padding: 1rem; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; padding: 1rem; align-items: flex-end; }
+.field { display: flex; flex-direction: column; gap: 0.375rem; flex: 1 1 240px; min-width: 220px; }
 .card-title { font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; color: #0f172a; }
 .with-icon svg { color: #0f172a; }
 .room-title { font-size: 1.1rem; font-weight: 600; color: var(--primary-blue); }

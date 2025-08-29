@@ -2,58 +2,31 @@
   <div class="login">
     <div class="login-container">
       <div class="login-header">
-        <h2>{{ isLogin ? '로그인' : '회원가입' }}</h2>
-        <p>만장토론 클럽에 {{ isLogin ? '로그인' : '가입' }}하세요</p>
+        <h2>로그인 / 회원가입</h2>
+        <p>만장토론 클럽은 네이버 계정으로 로그인합니다</p>
       </div>
-      
-      <form @submit.prevent="handleSubmit" class="login-form">
-        <div class="form-group">
-          <label for="username">아이디</label>
-          <input 
-            type="text" 
-            id="username"
-            v-model="form.username"
-            placeholder="아이디를 입력하세요"
-            required
-          />
-        </div>
-        
-        <div class="form-group">
-          <label for="password">비밀번호</label>
-          <input 
-            type="password" 
-            id="password"
-            v-model="form.password"
-            placeholder="비밀번호를 입력하세요"
-            required
-          />
-        </div>
-        
-        <div class="form-group" v-if="!isLogin">
-          <label for="confirmPassword">비밀번호 확인</label>
-          <input 
-            type="password" 
-            id="confirmPassword"
-            v-model="form.confirmPassword"
-            placeholder="비밀번호를 다시 입력하세요"
-            required
-          />
-        </div>
-        
-        <button type="submit" class="submit-btn">
-          {{ isLogin ? '로그인' : '회원가입' }}
-        </button>
-      </form>
-      
-      <div class="switch-mode">
-        <p>
-          {{ isLogin ? '계정이 없으신가요?' : '이미 계정이 있으신가요?' }}
-          <button @click="toggleMode" class="switch-btn">
-            {{ isLogin ? '회원가입' : '로그인' }}
+
+      <div v-if="!isOnboarding" class="social-section">
+        <a class="naver-login-cta" href="http://localhost:8000/naver" aria-label="네이버로 로그인">
+          <img src="@/assets/btnG_완성형.png" alt="Naver Login" />
+        </a>
+        <p class="help-text">버튼을 클릭하면 네이버 로그인 페이지로 이동합니다.</p>
+      </div>
+
+      <div v-else class="onboarding">
+        <h3>추가 정보 입력</h3>
+        <p class="help-text">처음 오신 것 같아요. sID를 입력해 가입을 완료해주세요.</p>
+        <form @submit.prevent="submitSID" class="onboarding-form">
+          <div class="form-group">
+            <label for="sid">sID</label>
+            <input id="sid" v-model="sid" placeholder="예: s123456" required />
+          </div>
+          <button class="submit-btn" type="submit" :disabled="submitting">
+            {{ submitting ? '처리 중...' : '가입 완료' }}
           </button>
-        </p>
+        </form>
       </div>
-      
+
       <div class="back-home">
         <router-link to="/home" class="back-btn">홈으로 돌아가기</router-link>
       </div>
@@ -62,35 +35,49 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 
 const router = useRouter()
-const isLogin = ref(true)
+const route = useRoute()
+const isOnboarding = ref(false)
+const name = ref('')
+const email = ref('')
+const sid = ref('')
+const submitting = ref(false)
 
-const form = reactive({
-  username: '',
-  password: '',
-  confirmPassword: ''
+onMounted(() => {
+  const onboarding = route.query.onboarding === '1'
+  const qName = typeof route.query.name === 'string' ? route.query.name : ''
+  const qEmail = typeof route.query.email === 'string' ? route.query.email : ''
+  if (onboarding && qEmail) {
+    isOnboarding.value = true
+    name.value = qName
+    email.value = qEmail
+  }
 })
 
-const toggleMode = () => {
-  isLogin.value = !isLogin.value
-  form.confirmPassword = ''
-}
-
-const handleSubmit = () => {
-  if (!isLogin.value && form.password !== form.confirmPassword) {
-    alert('비밀번호가 일치하지 않습니다.')
-    return
+async function submitSID() {
+  if (!sid.value || !email.value) return
+  submitting.value = true
+  try {
+    const res = await fetch('http://localhost:8000/naver/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.value, name: name.value, sid: sid.value })
+    })
+    const data = await res.json()
+    if (data?.redirect) {
+      window.location.href = data.redirect
+      return
+    }
+    // 실패 시 기본 홈 이동
+    router.push('/home')
+  } catch (e) {
+    alert('가입 처리 중 오류가 발생했습니다.')
+  } finally {
+    submitting.value = false
   }
-  
-  // 실제 로그인/회원가입 로직은 여기에 구현
-  console.log(isLogin.value ? '로그인 시도:' : '회원가입 시도:', form)
-  alert(`${isLogin.value ? '로그인' : '회원가입'} 요청이 완료되었습니다.`)
-  
-  // 성공 시 홈으로 이동
-  router.push('/home')
 }
 </script>
 
@@ -129,7 +116,11 @@ const handleSubmit = () => {
   margin: 0;
 }
 
-.login-form {
+.social-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
   margin-bottom: 2rem;
 }
 
@@ -158,27 +149,29 @@ const handleSubmit = () => {
   border-color: var(--primary-blue);
 }
 
-.submit-btn {
+.naver-login-cta img {
+  display: block;
   width: 100%;
-  padding: 0.75rem;
-  background: var(--primary-blue);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
+  max-width: 360px;
+  height: auto;
 }
 
-.submit-btn:hover {
-  background: var(--secondary-blue);
+.help-text {
+  color: #666;
+  font-size: 0.9rem;
+  margin: 0;
 }
 
-.switch-mode {
-  text-align: center;
-  margin-bottom: 1rem;
+.onboarding h3 {
+  color: var(--primary-blue);
+  margin-top: 0;
 }
+
+.onboarding-form {
+  margin-top: 1rem;
+}
+
+/* 폼/토글 UI 제거됨 */
 
 .switch-mode p {
   color: #666;
