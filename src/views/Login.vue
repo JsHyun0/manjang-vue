@@ -7,7 +7,7 @@
       </div>
 
       <div v-if="!isOnboarding" class="social-section">
-        <a class="naver-login-cta" href="http://localhost:8000/naver" aria-label="네이버로 로그인">
+        <a class="naver-login-cta" :href="API_BASE + '/naver'" aria-label="네이버로 로그인">
           <img src="@/assets/btnG_완성형.png" alt="Naver Login" />
         </a>
         <p class="help-text">버튼을 클릭하면 네이버 로그인 페이지로 이동합니다.</p>
@@ -45,6 +45,7 @@ const name = ref('')
 const email = ref('')
 const sid = ref('')
 const submitting = ref(false)
+const API_BASE = import.meta.env.VITE_API_BASE
 
 onMounted(() => {
   const onboarding = route.query.onboarding === '1'
@@ -61,7 +62,7 @@ async function submitSID() {
   if (!sid.value || !email.value) return
   submitting.value = true
   try {
-    const res = await fetch('http://localhost:8000/naver/complete', {
+    const res = await fetch(import.meta.env.VITE_API_URL+'/naver/complete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email.value, name: name.value, sid: sid.value })

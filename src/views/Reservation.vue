@@ -38,38 +38,60 @@
         <div class="card-content">
           <div class="section">
             <h3 class="section-title">예약 현황 ({{ selectedDate }})</h3>
-            <div class="grid">
+            <div class="timeline-container">
               <div
-                v-for="time in timeSlots"
-                :key="time"
-                :class="['slot', getSlotReservationCount(time) > 0 ? 'slot-has' : 'slot-empty', isSelected(time) ? 'slot-selected' : '']"
-                @mousedown="onSlotMouseDown(time)"
-                @mouseenter="onSlotMouseEnter(time)"
-                @mouseleave="onSlotMouseLeave(time)"
+                class="timeline-grid"
+                :style="{ gridTemplateColumns: `repeat(${timeSlots.length}, var(--slot-width))`, gridTemplateRows: `auto var(--row-height)`, '--row-height': rowHeight + 'px' }"
               >
-                <div class="slot-time">{{ time }}</div>
-                <div class="slot-meta" v-if="getSlotReservationCount(time) > 0">
-                  <div class="slot-badges">
-                    <div class="badge-line" v-if="getSlotNameBadges(time).first[0]">
-                      <span class="badge">{{ getSlotNameBadges(time).first[0] }}</span>
-                    </div>
-                    <div class="badge-line" v-if="getSlotNameBadges(time).first[1] || getSlotNameBadges(time).remaining > 0">
-                      <span v-if="getSlotNameBadges(time).first[1]" class="badge">{{ getSlotNameBadges(time).first[1] }}</span>
-                      <span v-if="getSlotNameBadges(time).remaining > 0" class="more-wrapper">
-                        <span
-                          class="badge more"
-                          @mouseenter.stop="showMore(time)"
-                          @mouseleave.stop="hideMore()"
-                          @click.stop="toggleMore(time)"
-                        >+{{ getSlotNameBadges(time).remaining }}</span>
-                        <div v-if="hoverMoreFor === time" class="popover">
-                          <div class="popover-item" v-for="n in getSlotNameBadges(time).rest" :key="n">{{ n }}</div>
-                        </div>
-                      </span>
-                    </div>
-                  </div>
+                <!-- 상단 시간 라벨 -->
+                <div
+                  v-for="time in timeSlots"
+                  :key="'label-' + time"
+                  class="time-label"
+                >
+                  <span v-if="time.endsWith(':00')">{{ time }}</span>
+                  <span v-else class="tick" />
                 </div>
-                <div class="slot-meta empty" v-else>예약 없음</div>
+
+                <!-- 하단 선택 가능한 셀 -->
+                <button
+                  v-for="time in timeSlots"
+                  :key="'cell-' + time"
+                  class="time-cell"
+                  :class="{ 'is-selected': isSelected(time), 'is-hour': time.endsWith(':00') }"
+                  @mousedown="onSlotMouseDown(time, $event)"
+                  @mouseenter="onSlotMouseEnter(time)"
+                  @mouseleave="onSlotMouseLeave(time)"
+                />
+
+                <!-- 오버레이 레이어 (절대 위치) -->
+                <div class="overlay-row">
+                  <!-- 예약 이벤트(개별 라인, 충돌시 수직 스택) -->
+                  <div
+                    v-for="ev in eventRects"
+                    :key="`ev-${ev.start}-${ev.span}-${ev.lane}-${ev.name}`"
+                    class="event-abs"
+                    :title="ev.name"
+                    :style="{ left: `calc(var(--slot-width) * ${ev.start})`, width: `calc(var(--slot-width) * ${ev.span})`, top: `${8 + (20 * ev.lane)}px` }"
+                  >
+                    <span class="event-label">{{ ev.name }}</span>
+                  </div>
+
+                  <!-- 드래그 미리보기 -->
+                  <div
+                    v-if="dragPreview"
+                    class="selection-abs preview"
+                    :style="{ left: `calc(var(--slot-width) * ${dragPreview.start})`, width: `calc(var(--slot-width) * ${dragPreview.span})` }"
+                  />
+
+                  <!-- 확정된 선택 블록(다중 지원) -->
+                  <div
+                    v-for="sb in selectedBlocks"
+                    :key="`sel-${sb.start}-${sb.span}`"
+                    class="selection-abs confirmed"
+                    :style="{ left: `calc(var(--slot-width) * ${sb.start})`, width: `calc(var(--slot-width) * ${sb.span})` }"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -143,16 +165,19 @@ const computeRange = (a: string, b: string): string[] => {
 const effectiveSelectedHas = (time: string): boolean => {
   if (!isDragging.value || !dragStart.value || !dragCurrent.value) return selectedSet.value.has(time)
   const range = new Set(computeRange(dragStart.value, dragCurrent.value))
-  if (dragMode.value === 'select') {
-    return baseSetDuringDrag.has(time) || range.has(time)
-  } else {
+  const allSelected = Array.from(range).every(t => baseSetDuringDrag.has(t))
+  // 미리보기: 모두 선택되어 있으면 범위를 해제한 상태로, 아니면 선택한 상태로 미리보기
+  if (allSelected) {
     return baseSetDuringDrag.has(time) && !range.has(time)
   }
+  return baseSetDuringDrag.has(time) || range.has(time)
 }
 
 const isSelected = (time: string) => effectiveSelectedHas(time)
 
-const onSlotMouseDown = (time: string) => {
+const onSlotMouseDown = (time: string, e?: MouseEvent) => {
+  e?.preventDefault()
+  e?.stopPropagation()
   isDragging.value = true
   dragStart.value = time
   dragCurrent.value = time
@@ -166,13 +191,15 @@ const onSlotMouseEnter = (time: string) => {
 }
 
 const handleMouseUp = () => {
-  if (!isDragging.value || !dragStart.value || !dragCurrent.value) { isDragging.value = false; return }
+  if (!isDragging.value || !dragStart.value || !dragCurrent.value) { isDragging.value = false; dragStart.value = null; dragCurrent.value = null; return }
   const range = computeRange(dragStart.value, dragCurrent.value)
+  const allSelected = range.every(t => baseSetDuringDrag.has(t))
   const next = new Set(baseSetDuringDrag)
-  if (dragMode.value === 'select') {
-    range.forEach(t => next.add(t))
-  } else {
+  // 토글 규칙: 범위 내 모든 슬롯이 이미 선택되어 있으면 해제, 아니면 선택
+  if (allSelected) {
     range.forEach(t => next.delete(t))
+  } else {
+    range.forEach(t => next.add(t))
   }
   selectedSet.value = next
   isDragging.value = false
@@ -183,21 +210,7 @@ const handleMouseUp = () => {
 onMounted(() => document.addEventListener('mouseup', handleMouseUp))
 onBeforeUnmount(() => document.removeEventListener('mouseup', handleMouseUp))
 
-const getSlotReservations = (time: string) => reservations.value.filter(r => r.date === selectedDate.value && r.timeSlot === time)
-const getSlotReservationCount = (time: string) => getSlotReservations(time).length
-const getSlotNameBadges = (time: string): { first: string[]; remaining: number; rest: string[] } => {
-  const names = getSlotReservations(time).map(r => r.name)
-  const unique = Array.from(new Set(names))
-  return { first: unique.slice(0, 2), remaining: Math.max(0, unique.length - 2), rest: unique.slice(2) }
-}
-
-const hoverMoreFor = ref<string | null>(null)
-const showMore = (time: string) => { hoverMoreFor.value = time }
-const hideMore = () => { hoverMoreFor.value = null }
-const toggleMore = (time: string) => { hoverMoreFor.value = hoverMoreFor.value === time ? null : time }
-const onSlotMouseLeave = (time: string) => {
-  if (hoverMoreFor.value === time) return
-  // 드래그 상태만 초기화
+const onSlotMouseLeave = (_time: string) => {
   if (!isDragging.value) return
 }
 
@@ -229,6 +242,107 @@ const refreshReservations = async () => {
 // 초기 로드 및 날짜 변경 시 업데이트
 refreshReservations()
 watchEffect(refreshReservations)
+
+// -----------------
+// Timeline computed
+// -----------------
+type EventRect = { start: number; span: number; lane: number; name: string }
+
+const eventRects = computed<EventRect[]>(() => {
+  const curDate = selectedDate.value
+  // key -> { name, indices }
+  const keyTo = new Map<string, { name: string; indices: number[] }>()
+  for (const r of reservations.value) {
+    if (r.date !== curDate) continue
+    const idx = toIndex(r.timeSlot)
+    if (idx < 0) continue
+    const key = r.id && r.id !== 0 ? `id:${r.id}` : `name:${r.name}`
+    const bucket = keyTo.get(key) ?? { name: r.name, indices: [] }
+    bucket.indices.push(idx)
+    keyTo.set(key, bucket)
+  }
+
+  type Interval = { name: string; start: number; end: number }
+  const intervals: Interval[] = []
+  for (const { name, indices } of keyTo.values()) {
+    indices.sort((a, b) => a - b)
+    let s = -1, p = -2
+    for (const i of indices) {
+      if (i === p + 1) {
+        // extend
+      } else {
+        if (s !== -1) intervals.push({ name, start: s, end: p })
+        s = i
+      }
+      p = i
+    }
+    if (s !== -1) intervals.push({ name, start: s, end: p })
+  }
+
+  // lane assignment (interval graph coloring)
+  intervals.sort((a, b) => a.start - b.start || b.end - a.end)
+  const laneEnds: number[] = [] // exclusive end index for each lane
+  const rects: EventRect[] = []
+  for (const it of intervals) {
+    let lane = 0
+    while (lane < laneEnds.length && laneEnds[lane] > it.start) {
+      lane++
+    }
+    if (lane === laneEnds.length) {
+      laneEnds.push(it.end + 1)
+    } else {
+      laneEnds[lane] = it.end + 1
+    }
+    rects.push({ start: it.start, span: it.end - it.start + 1, lane, name: it.name })
+  }
+  return rects
+})
+
+type RangeBlock = { start: number; span: number }
+
+const selectedBlocks = computed<RangeBlock[]>(() => {
+  const idxs = Array.from(selectedSet.value)
+    .map(t => toIndex(t))
+    .filter(i => i >= 0)
+    .sort((a, b) => a - b)
+  const blocks: RangeBlock[] = []
+  let j = 0
+  while (j < idxs.length) {
+    let k = j + 1
+    while (k < idxs.length && idxs[k] === idxs[k - 1] + 1) k++
+    blocks.push({ start: idxs[j], span: idxs[k - 1] - idxs[j] + 1 })
+    j = k
+  }
+  return blocks
+})
+
+const dragPreview = computed<RangeBlock | null>(() => {
+  if (!isDragging.value || !dragStart.value || !dragCurrent.value) return null
+  const a = toIndex(dragStart.value)
+  const b = toIndex(dragCurrent.value)
+  if (a < 0 || b < 0) return null
+  const start = Math.min(a, b)
+  const span = Math.abs(b - a) + 1
+  return { start, span }
+})
+
+// 예약 여부 (단일 슬롯)
+const isReservedTime = (time: string): boolean => {
+  return reservations.value.some(r => r.date === selectedDate.value && r.timeSlot === time)
+}
+
+// 동적 row 높이 계산: 이벤트 라인의 최대 lane 수에 따라 증가
+const maxLane = computed(() => {
+  return eventRects.value.reduce((m, r) => Math.max(m, r.lane), -1) + 1
+})
+const rowHeight = computed(() => {
+  const base = 52 // 기본 셀 높이
+  const laneGap = 20 // 각 라인 간격 (사용자 조정 반영)
+  const topPadding = 6
+  const selectionHeight = 40
+  const needed = topPadding + Math.max(selectionHeight, maxLane.value > 0 ? (8 + (maxLane.value - 1) * laneGap) + 12 : 0)
+  return Math.max(base, needed)
+})
 </script>
 
 <style scoped>
@@ -307,4 +421,70 @@ watchEffect(refreshReservations)
 .btn-primary:hover { background: var(--secondary-blue); }
 .btn-ghost { background: transparent; color: #334155; border-color: #e5e7eb; }
 .btn-ghost:hover { background: #f8fafc; }
+
+/* Timeline */
+.timeline-container {
+  --slot-width: 84px;
+  overflow-x: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+  user-select: none;
+}
+
+.timeline-grid {
+  display: grid;
+  grid-template-rows: auto var(--row-height);
+  align-items: stretch;
+  position: relative;
+}
+
+.time-label {
+  grid-row: 1;
+  width: var(--slot-width);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  color: #475569;
+  border-right: 1px solid #eef2f7;
+  padding: 0.25rem 0;
+}
+.time-label .tick {
+  width: 1px;
+  height: 10px;
+  background: #cbd5e1;
+}
+
+.time-cell {
+  grid-row: 2;
+  width: var(--slot-width);
+  height: var(--row-height);
+  border: none;
+  border-right: 1px solid #eef2f7;
+  background: #f8fafc;
+  cursor: pointer;
+  transition: background-color 0.06s linear;
+  position: relative;
+}
+.time-cell:hover { background: #f1f5f9; }
+.time-cell.is-selected { background: #e0efff; }
+.time-cell.is-hour::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #cbd5e1;
+}
+.time-cell.is-reserved { background: #fff1f3; cursor: not-allowed; }
+
+/* 오버레이 레이어 (절대 위치) */
+.overlay-row { position: absolute; left: 0; right: 0; bottom: 0; height: var(--row-height); pointer-events: none; }
+.event-abs { position: absolute; height: 16px; background: #93c5fd; border-radius: 4px; z-index: 1; display: flex; align-items: center; }
+.event-abs .event-label { position: static; margin-left: 6px; font-size: 12px; color: #0f172a; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.selection-abs { position: absolute; top: 4px; height: calc(var(--row-height) - 8px); background: rgba(74,144,226,0.18); border: 2px solid rgba(74,144,226,0.65); border-radius: 10px; z-index: 3; }
+.selection-abs.preview { border-style: dashed; }
+.selection-abs.confirmed { border-style: solid; }
 </style>
