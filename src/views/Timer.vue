@@ -40,12 +40,12 @@
         </div>
       </div>
 
-      <!-- SSU 단계 상단바 -->
-      <div v-if="stage === 'run' && timerType === 'ssu'" class="step-topbar">
+      <!-- 공통 단계 상단바 (SSU/자유 공용) -->
+      <div v-if="stage === 'run'" class="step-topbar">
         <div class="step-buttons">
           <button
-            v-for="(step, i) in ssuSteps"
-            :key="`step-${i}`"
+            v-for="(step, i) in activeSteps"
+            :key="`topbar-step-${i}`"
             class="step-dot"
             :class="{ active: i === currentStep }"
             :title="step.title"
@@ -57,10 +57,22 @@
       </div>
 
       <!-- 메인 타이머 영역 -->
-      <div v-if="stage === 'run'" class="timer-main" :class="{ 'ssu-mode': timerType === 'ssu' }">
-        <div v-if="debateTopic" class="debate-topic-global">{{ debateTopic }}</div>
+      <div
+        v-if="stage === 'run'"
+        class="timer-main"
+        :class="{
+          'ssu-mode': isSsuMode,
+          'free-dual': isFreeMode && isDualPhase,
+        }"
+      >
+        <div v-if="showDebateTopicGlobal" class="debate-topic-global">
+          {{ debateTopic }}
+        </div>
+        <div v-if="showDebateTopicBar" class="debate-topic-bar">
+          {{ debateTopic }}
+        </div>
         <!-- 왼쪽 토론자들 (SSU 모드에서만 표시) -->
-        <div v-if="timerType === 'ssu'" class="debaters-left">
+        <div v-if="isSsuMode" class="debaters-left">
           <div class="debater-group">
             <h3>긍정</h3>
             <div class="debater-icons">
@@ -119,8 +131,8 @@
           </div>
         </div>
 
-        <!-- 가운데 타이머 -->
-        <div class="timer-display">
+        <!-- 가운데 타이머 (자유토론의 '자유 토론' 단계가 아닌 경우 표시) -->
+        <div v-if="showCenterTimer" class="timer-display">
           <div class="timer-circle" :class="{ 'cue-30s': thirtySecondCueActive }">
             <div v-if="isSupplementTime" class="supplement-overlay">
               <div class="supplement-box">
@@ -170,9 +182,7 @@
                     ? '보충질의'
                     : isStrategyTime
                       ? '작전타임'
-                      : timerType === 'ssu'
-                        ? currentStepInfo?.title
-                        : '자유 토론'
+                      : currentStepInfo?.title
                 }}
               </div>
             </div>
@@ -181,9 +191,9 @@
           <!-- 타이머 컨트롤 -->
           <div class="timer-controls">
             <div class="control-row main">
-              <!-- SSU 모드일 때만 이전/다음 단계 버튼 표시 -->
+              <!-- 단계 버튼: SSU/자유(CEDA) 모두 표시. 자유토론의 '자유 토론' 단계에서는 숨김 -->
               <button
-                v-if="timerType === 'ssu' && !isStrategyTime && !isSupplementTime"
+                v-if="showStepButtons"
                 class="control-btn step-btn"
                 @click="previousStep"
                 :disabled="currentStep === 0"
@@ -191,17 +201,24 @@
                 ← 이전
               </button>
 
-              <button class="control-btn play-pause" @click="toggleTimer" :disabled="isSupplementTime">
+              <button
+                v-if="showCenterTimer"
+                class="control-btn play-pause"
+                @click="toggleTimer"
+                :disabled="isSupplementTime"
+              >
                 <i class="icon">{{ isRunning ? '⏸️' : '▶️' }}</i>
                 {{ isRunning ? '일시정지' : '시작' }}
               </button>
 
-              <!-- SSU 모드일 때만 이전/다음 단계 버튼 표시 -->
+              <!-- 단계 버튼: SSU/자유(CEDA) 모두 표시. 자유토론의 '자유 토론' 단계에서는 숨김 -->
               <button
-                v-if="timerType === 'ssu' && !isStrategyTime && !isSupplementTime"
+                v-if="showStepButtons"
                 class="control-btn step-btn"
                 @click="nextStep"
-                :disabled="currentStep === ssuSteps.length - 1"
+                :disabled="
+                  currentStep === (timerType === 'ssu' ? ssuSteps.length - 1 : cedaSteps.length - 1)
+                "
               >
                 다음 →
               </button>
@@ -222,8 +239,66 @@
           </div>
         </div>
 
+        <!-- 자유토론 '자유 토론' 단계: 듀얼 사각형 타이머 -->
+        <div v-else class="dual-timers">
+          <div
+            class="rect-timer positive"
+            :class="{ active: isDualPositiveRunning }"
+            @click="toggleDualTimer('positive')"
+          >
+            <div class="rect-title">긍정</div>
+            <div class="rect-time">{{ formatTime(dualPositiveTime) }}</div>
+            <div class="sub-timer" :class="{ warning: dualPositiveSubRemaining <= 10 }">
+              <!-- <span class="sub-label">연속 발언 제한</span> -->
+              <span class="sub-time">{{ formatTime(dualPositiveSubRemaining) }}</span>
+            </div>
+            <div class="rect-controls">
+              <button class="control-btn play-pause" @click.stop="toggleDualTimer('positive')">
+                <i class="icon">{{ isDualPositiveRunning ? '⏸️' : '▶️' }}</i>
+                {{ isDualPositiveRunning ? '일시정지' : '시작' }}
+              </button>
+              <button class="control-btn edit" @click.stop="openAdjustModal('positive')">
+                수정
+              </button>
+            </div>
+          </div>
+          <div
+            class="rect-timer negative"
+            :class="{ active: isDualNegativeRunning }"
+            @click="toggleDualTimer('negative')"
+          >
+            <div class="rect-title">부정</div>
+            <div class="rect-time">{{ formatTime(dualNegativeTime) }}</div>
+            <div class="sub-timer" :class="{ warning: dualNegativeSubRemaining <= 10 }">
+              <!-- <span class="sub-label">연속 발언 제한</span> -->
+              <span class="sub-time">{{ formatTime(dualNegativeSubRemaining) }}</span>
+            </div>
+            <div class="rect-controls">
+              <button class="control-btn play-pause" @click.stop="toggleDualTimer('negative')">
+                <i class="icon">{{ isDualNegativeRunning ? '⏸️' : '▶️' }}</i>
+                {{ isDualNegativeRunning ? '일시정지' : '시작' }}
+              </button>
+              <button class="control-btn edit" @click.stop="openAdjustModal('negative')">
+                수정
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 시간 수정 팝업 -->
+        <div v-if="showAdjustModal" class="adjust-modal-backdrop" @click="closeAdjustModal">
+          <div class="adjust-modal" @click.stop>
+            <div class="adjust-title">시간 수정</div>
+            <div class="adjust-actions">
+              <button class="control-btn edit" @click="adjustDualTime(5)">+5초</button>
+              <button class="control-btn edit" @click="adjustDualTime(-5)">-5초</button>
+            </div>
+            <button class="control-btn step-btn" @click="closeAdjustModal">닫기</button>
+          </div>
+        </div>
+
         <!-- 오른쪽 토론자들 (SSU 모드에서만 표시) -->
-        <div v-if="timerType === 'ssu'" class="debaters-right">
+        <div v-if="isSsuMode" class="debaters-right">
           <div class="debater-group">
             <h3>부정</h3>
             <div class="debater-icons">
@@ -292,7 +367,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useSSUTimer } from '@/lib/timer'
+import { useSSUTimer, defaultCEDASteps } from '@/lib/timer'
 import TimerSettings from '@/components/TimerSettings.vue'
 
 // 타이머 훅 사용
@@ -305,12 +380,14 @@ const {
   isSupplementTime,
   currentStep,
   usageCounters,
-  freeDurationSeconds,
 
   // 계산된 값
   currentStepInfo,
   ssuSteps,
   activeSpeakers,
+  cedaSteps,
+  activeSteps,
+  isCedaFreeDebateStep,
 
   // 메서드
   toggleTimer,
@@ -328,24 +405,31 @@ const {
   toggleUsage,
   formatTime,
   setSSUStepDurations,
-  setFreeDuration,
+  setCEDAStepDurations,
   supplementRemaining,
   thirtySecondCueActive,
+  // 듀얼 타이머
+  dualPositiveTime,
+  dualNegativeTime,
+  isDualPositiveRunning,
+  isDualNegativeRunning,
+  dualPositiveSubRemaining,
+  dualNegativeSubRemaining,
+  toggleDualTimer,
+  resetDualTimer,
 } = useSSUTimer()
 
 // 원형 프로그레스 계산 (컨테이너 300px, stroke 4px → r = 150 - 2 = 148)
 const circumference = 2 * Math.PI * 148
 
 const progressOffset = computed(() => {
-  let maxTime = freeDurationSeconds.value // 자유토론 설정값
-
+  let maxTime = 600
   if (isStrategyTime.value) {
-    maxTime = 60 // 작전타임 1분
-  } else if (timerType.value === 'ssu' && currentStepInfo.value) {
+    maxTime = 60
+  } else if (currentStepInfo.value) {
     maxTime = currentStepInfo.value.duration
   }
-
-  const progress = currentTime.value / maxTime
+  const progress = Math.max(0, Math.min(1, currentTime.value / maxTime))
   return circumference * (1 - progress)
 })
 
@@ -359,10 +443,61 @@ const preparePhases = ref<PreparePhase[]>([])
 // 논제 입력
 const debateTopic = ref<string>('')
 
+// === 뷰 전용 컴퓨티드 (조건 단순화) ===
+const isSsuMode = computed(() => timerType.value === 'ssu')
+const isFreeMode = computed(() => timerType.value === 'free')
+const isDualPhase = computed(() => isCedaFreeDebateStep.value)
+const showCenterTimer = computed(() => !(isFreeMode.value && isDualPhase.value))
+const showDebateTopicGlobal = computed(() => !!debateTopic.value && !isFreeMode.value)
+const showDebateTopicBar = computed(() => !!debateTopic.value && isFreeMode.value)
+const showStepButtons = computed(
+  () =>
+    (isSsuMode.value || isFreeMode.value) &&
+    !isStrategyTime.value &&
+    !isSupplementTime.value &&
+    showCenterTimer.value,
+)
+
+// 듀얼 타이머 시간 수정 팝업 상태 및 로직
+const showAdjustModal = ref(false)
+const adjustTargetSide = ref<null | 'positive' | 'negative'>(null)
+
+const openAdjustModal = (side: 'positive' | 'negative') => {
+  adjustTargetSide.value = side
+  showAdjustModal.value = true
+}
+
+const closeAdjustModal = () => {
+  showAdjustModal.value = false
+  adjustTargetSide.value = null
+}
+
+const adjustDualTime = (deltaSeconds: number) => {
+  if (!isCedaFreeDebateStep.value) return
+  const side = adjustTargetSide.value
+  if (!side) return
+  const isPos = side === 'positive'
+  const timeRef = isPos ? dualPositiveTime : dualNegativeTime
+  const isRunningSide = isPos ? isDualPositiveRunning.value : isDualNegativeRunning.value
+  const maxStep = currentStepInfo.value?.duration ?? 0
+  let next = timeRef.value + deltaSeconds
+  next = Math.max(0, Math.min(maxStep, next))
+  // 시간이 0이 되면 즉시 해당 측을 정지시켜 음수 표시 방지
+  if (next === 0 && isRunningSide) {
+    toggleDualTimer(side)
+  }
+  timeRef.value = next
+  closeAdjustModal()
+}
+
 const handleSelectMode = (mode: 'free' | 'ssu') => {
   selectedMode.value = mode
   if (mode === 'free') {
-    preparePhases.value = [{ name: '자유토론', duration: Math.max(1, freeDurationSeconds.value) }]
+    // 자유토론 모드에서도 준비 화면은 CEDA 단계 리스트를 기반으로 노출
+    preparePhases.value = defaultCEDASteps.map((step) => ({
+      name: step.title,
+      duration: Math.max(1, step.duration),
+    }))
   } else {
     preparePhases.value = ssuSteps.value.map((step) => ({
       name: step.title,
@@ -383,8 +518,8 @@ const updatePhaseDuration = (index: number, durationSeconds: number) => {
 const startDebate = () => {
   if (!selectedMode.value) return
   if (selectedMode.value === 'free') {
-    const seconds = Math.max(1, preparePhases.value[0]?.duration || 600)
-    setFreeDuration(seconds)
+    const durationsSeconds = preparePhases.value.map((p) => Math.max(1, p.duration))
+    setCEDAStepDurations(durationsSeconds)
     selectTimerType('free')
   } else {
     const durationsSeconds = preparePhases.value.map((p) => Math.max(1, p.duration))
@@ -619,6 +754,155 @@ const handleSupplementCounterClick = (side: 'positive' | 'negative') => {
   --debater-width: 300px;
 }
 
+/* 자유토론 듀얼 타이머 단계 전용 레이아웃 */
+.timer-main.free-dual {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 1rem 0 4.5rem;
+}
+
+/* 자유토론 일반 단계도 column 레이아웃로 고정 */
+.timer-main:not(.ssu-mode) {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+
+/* 자유토론 듀얼 타이머 */
+.dual-timers {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: none;
+  height: calc(100vh - 180px); /* 상단바/논제/하단바 여백 제외 후 전체 높이 활용 */
+}
+
+/* 듀얼 단계에서는 헤더 바가 별도로 공간을 차지하므로 고정 높이를 해제 */
+.timer-main.free-dual .dual-timers {
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* free 일반 단계에서 원형 타이머 중앙 정렬 및 여백 */
+.timer-main:not(.ssu-mode) .timer-display {
+  margin: 0 auto;
+  padding-top: 0.5rem;
+}
+
+.rect-timer {
+  flex: 1 1 0;
+  min-width: 280px;
+  max-width: none;
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 1.6rem 1.6rem 1.2rem;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.rect-timer.positive {
+  border-color: var(--primary-blue);
+}
+
+.rect-timer.negative {
+  border-color: #ef4444;
+}
+
+/* 듀얼 타이머 활성 강조 효과 */
+.rect-timer.active {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow:
+    0 16px 36px rgba(0, 0, 0, 0.12),
+    0 0 0 4px rgba(74, 144, 226, 0.08);
+}
+.rect-timer.positive.active {
+  border-color: var(--primary-blue);
+  box-shadow:
+    0 16px 36px rgba(74, 144, 226, 0.22),
+    0 0 0 4px rgba(74, 144, 226, 0.15);
+}
+.rect-timer.negative.active {
+  border-color: #ef4444;
+  box-shadow:
+    0 16px 36px rgba(239, 68, 68, 0.22),
+    0 0 0 4px rgba(239, 68, 68, 0.15);
+}
+
+@keyframes activePulse {
+  0% {
+    transform: translateY(-2px) scale(1.01);
+  }
+  50% {
+    transform: translateY(-1px) scale(1.02);
+  }
+  100% {
+    transform: translateY(-2px) scale(1.01);
+  }
+}
+.rect-timer.active .rect-title,
+.rect-timer.active .rect-time {
+  animation: activePulse 1.2s ease-in-out infinite;
+}
+
+.rect-title {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #0b2239;
+  margin-bottom: 0.4rem;
+}
+
+.rect-time {
+  font-size: 4rem;
+  font-weight: 800;
+  color: #0b2239;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  margin: 0.6rem 0 1rem;
+}
+
+.sub-timer {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  background: #f9fafb;
+  border: 1px dashed #e5e7eb;
+  color: #4b5563;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+}
+
+.sub-timer.warning {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #9a3412;
+}
+
+.sub-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.sub-time {
+  font-weight: 500;
+  font-size: 1.5rem;
+}
+
+.rect-controls {
+  display: flex;
+  gap: 0.6rem;
+}
+
 /* 전역(가운데 상단) 논제 표시 */
 .debate-topic-global {
   position: absolute;
@@ -632,6 +916,21 @@ const handleSupplementCounterClick = (side: 'positive' | 'negative') => {
   font-size: 2rem;
   word-break: keep-all;
   pointer-events: none;
+}
+
+/* 듀얼 단계 전용 논제 바 (레이아웃 분리용) */
+.debate-topic-bar {
+  text-align: center;
+  font-weight: 800;
+  color: #1f2937;
+  line-height: 1.25;
+  font-size: 1.6rem;
+  word-break: keep-all;
+  padding: 0.75rem 0.5rem;
+  margin-bottom: 1rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
 }
 
 /* SSU 모드에서는 좌/우 아이콘 영역(220px) 사이만 차지 */
@@ -890,9 +1189,15 @@ const handleSupplementCounterClick = (side: 'positive' | 'negative') => {
 }
 
 @keyframes cuePulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.04); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 /* 보충질의 오버레이 */
@@ -928,7 +1233,6 @@ const handleSupplementCounterClick = (side: 'positive' | 'negative') => {
   font-size: 3rem;
   font-weight: 900;
   color: #0b2239;
-  font-family: 'Courier New', monospace;
   text-shadow: 0 2px 8px rgba(255, 255, 255, 0.45);
 }
 
@@ -974,7 +1278,6 @@ const handleSupplementCounterClick = (side: 'positive' | 'negative') => {
   font-weight: 700;
   color: var(--primary-blue);
   margin-bottom: 0.8rem;
-  font-family: 'Courier New', monospace;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
@@ -1036,6 +1339,12 @@ const handleSupplementCounterClick = (side: 'positive' | 'negative') => {
   min-width: 110px;
 }
 
+.control-btn.edit {
+  background: #6b7280;
+  color: white;
+  min-width: 80px;
+}
+
 .control-btn.reset {
   background: #dc3545;
   color: white;
@@ -1090,6 +1399,12 @@ const handleSupplementCounterClick = (side: 'positive' | 'negative') => {
   .timer-main.ssu-mode {
     flex-direction: column;
     gap: 1.5rem;
+  }
+
+  .dual-timers {
+    flex-direction: column;
+    align-items: stretch;
+    max-width: 520px;
   }
 
   .debaters-left,
@@ -1245,5 +1560,39 @@ const handleSupplementCounterClick = (side: 'positive' | 'negative') => {
 .finish-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 6px 16px rgba(220, 53, 69, 0.3);
+}
+
+/* 시간 수정 팝업 */
+.adjust-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.adjust-modal {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 1rem 1.2rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+  min-width: 260px;
+}
+
+.adjust-title {
+  font-weight: 800;
+  color: #0b2239;
+  font-size: 1.1rem;
+}
+
+.adjust-actions {
+  display: flex;
+  gap: 0.6rem;
 }
 </style>

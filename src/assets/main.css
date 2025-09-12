@@ -1,16 +1,30 @@
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
 @import './base.css';
 
 :root {
-  --primary-blue: #4A90E2;
-  --secondary-blue: #5BA3F5;
-  --light-blue: #E6F3FF;
-  --dark-blue: #3A7BC8;
+  --primary-blue: #4a90e2;
+  --secondary-blue: #5ba3f5;
+  --light-blue: #e6f3ff;
+  --dark-blue: #3a7bc8;
 }
 
 #app {
   margin: 0;
   font-weight: normal;
-  font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family:
+    'Pretendard',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    Oxygen,
+    Ubuntu,
+    Cantarell,
+    'Fira Sans',
+    'Droid Sans',
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
 }
 
 body {
