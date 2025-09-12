@@ -27,7 +27,7 @@ const formattedTime = computed(() => formatTime(props.currentTime))
 .timer-display {
   display: flex;
   justify-content: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
 }
 
 .time-circle {
@@ -53,4 +53,4 @@ const formattedTime = computed(() => formatTime(props.currentTime))
   font-size: 1rem;
   opacity: 0.9;
 }
-</style> 
+</style>
