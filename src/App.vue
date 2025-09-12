@@ -33,9 +33,13 @@ function onLogout() {
           <router-link to="/timer" class="nav-link">타이머</router-link>
           <router-link to="/reservation" class="nav-link">예약</router-link>
           <router-link to="/record" class="nav-link">기록</router-link>
-          <router-link v-if="!isLoggedIn" to="/login" class="nav-link login-btn">로그인/가입</router-link>
+          <router-link v-if="!isLoggedIn" to="/login" class="nav-link login-btn"
+            >로그인/가입</router-link
+          >
           <div v-else class="nav-user">
-            <button type="button" class="nav-link user-pill" @click="menuOpen = !menuOpen">{{ displayName(userName) }}</button>
+            <button type="button" class="nav-link user-pill" @click="menuOpen = !menuOpen">
+              {{ displayName(userName) }}
+            </button>
             <div v-if="menuOpen" class="user-dropdown">
               <button type="button" class="dropdown-item" @click="onLogout">로그아웃</button>
             </div>
@@ -72,9 +76,9 @@ function onLogout() {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  text-decoration: none;
+  /* text-decoration: none; */
   color: var(--primary-blue);
-  font-weight: bold;
+  font-weight: 800;
   font-size: 1.2rem;
 }
 
@@ -154,7 +158,7 @@ function onLogout() {
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
   padding: 0.5rem;
   min-width: 140px;
   z-index: 1000;
