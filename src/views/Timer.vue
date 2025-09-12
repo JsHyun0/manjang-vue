@@ -366,7 +366,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useSSUTimer, defaultCEDASteps } from '@/lib/timer'
 import TimerSettings from '@/components/TimerSettings.vue'
 
@@ -560,6 +560,33 @@ const handleSupplementCounterClick = (side: 'positive' | 'negative') => {
   toggleUsage(side, 'supplementaryQuestion')
   startSupplementTime(side)
 }
+
+// ====== 키보드 조작: 듀얼 타이머에서 좌/우 화살표로 발언 전환 ======
+const handleKeydown = (e: KeyboardEvent) => {
+  // 실행 단계가 아니거나 듀얼 단계가 아니면 무시
+  if (stage.value !== 'run' || !isCedaFreeDebateStep.value) return
+  // 입력 포커스가 입력창일 경우 방해하지 않음
+  const target = e.target as HTMLElement | null
+  if (target && ['INPUT', 'TEXTAREA'].includes(target.tagName)) return
+
+  if (e.key === 'ArrowLeft') {
+    e.preventDefault()
+    // 긍정측이 이미 진행 중이면 유지, 아니면 시작(반대측은 자동 일시정지)
+    if (!isDualPositiveRunning.value) toggleDualTimer('positive')
+  } else if (e.key === 'ArrowRight') {
+    e.preventDefault()
+    // 부정측이 이미 진행 중이면 유지, 아니면 시작(반대측은 자동 일시정지)
+    if (!isDualNegativeRunning.value) toggleDualTimer('negative')
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeydown)
+})
 </script>
 
 <style scoped>
@@ -744,7 +771,7 @@ const handleSupplementCounterClick = (side: 'positive' | 'negative') => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 3.5rem 0 4.5rem; /* 상단 논제 공간 + 하단바 여백 확보 */
+  padding: 2rem 0 1rem; /* 상단 논제 공간 + 하단바 여백 확보 */
   position: relative;
 }
 
@@ -926,8 +953,8 @@ const handleSupplementCounterClick = (side: 'positive' | 'negative') => {
   line-height: 1.25;
   font-size: 1.6rem;
   word-break: keep-all;
-  padding: 0.75rem 0.5rem;
-  margin-bottom: 1rem;
+  padding: 0.75rem 0.75rem;
+  margin-bottom: 4rem;
   background: #f9fafb;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
@@ -1131,6 +1158,7 @@ const handleSupplementCounterClick = (side: 'positive' | 'negative') => {
   flex-direction: column;
   align-items: center;
   max-width: 400px;
+  margin-top: 2rem;
 }
 
 .step-buttons {
