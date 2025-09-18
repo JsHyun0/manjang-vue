@@ -832,7 +832,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease,
@@ -895,7 +895,7 @@ onBeforeUnmount(() => {
   font-weight: 800;
   color: #0b2239;
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-  margin: 0.6rem 0 1rem;
+  margin: 0.6rem 0;
 }
 
 .sub-timer {
@@ -907,6 +907,8 @@ onBeforeUnmount(() => {
   color: #4b5563;
   padding: 0.4rem 0.6rem;
   border-radius: 8px;
+  margin-top: 1rem;
+  margin-bottom: 2rem;
 }
 
 .sub-timer.warning {
@@ -922,7 +924,7 @@ onBeforeUnmount(() => {
 
 .sub-time {
   font-weight: 500;
-  font-size: 1.5rem;
+  font-size: 2.5rem;
 }
 
 .rect-controls {
