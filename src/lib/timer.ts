@@ -208,6 +208,12 @@ export const useSSUTimer = () => {
     return title.includes('자유') && title.includes('토론')
   })
 
+  const isCedaDeliberationStep = computed(() => {
+    if (timerType.value !== 'free') return false
+    const title = currentStepInfo.value?.title || ''
+    return title.includes('숙의')
+  })
+
   // 현재 단계에서 발언권이 있는 토론자 계산
   // const activeSpeaker = computed<ActiveSpeaker>(() => {
   //   if (timerType.value !== 'ssu' || isStrategyTime.value) {
@@ -290,10 +296,13 @@ export const useSSUTimer = () => {
         currentTime.value--
         // 30초 알림 (SSU 단계에서만, 작전/보충 제외)
         if (
-          timerType.value === 'ssu' &&
           !isStrategyTime.value &&
           !isSupplementTime.value &&
-          currentTime.value === 30
+          currentTime.value === 30 &&
+          (timerType.value === 'ssu' ||
+            (timerType.value === 'free' &&
+              !isCedaFreeDebateStep.value &&
+              !isCedaDeliberationStep.value))
         ) {
           triggerThirtySecondCue()
         }
