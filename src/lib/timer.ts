@@ -629,14 +629,12 @@ export const useSSUTimer = () => {
       isDualPositiveRunning.value = false
       if (dualPositiveSubInterval) clearInterval(dualPositiveSubInterval)
       dualPositiveSubInterval = null
-      dualPositiveSubRemaining.value = Math.min(subTurnLimitSeconds, dualPositiveTime.value)
     } else {
       if (dualNegativeInterval) clearInterval(dualNegativeInterval)
       dualNegativeInterval = null
       isDualNegativeRunning.value = false
       if (dualNegativeSubInterval) clearInterval(dualNegativeSubInterval)
       dualNegativeSubInterval = null
-      dualNegativeSubRemaining.value = Math.min(subTurnLimitSeconds, dualNegativeTime.value)
     }
   }
 
@@ -658,6 +656,13 @@ export const useSSUTimer = () => {
     // 반대쪽 자동 일시정지
     if (otherRunningRef.value) pauseDualSide(isPos ? 'negative' : 'positive')
 
+    // 반대편 타이머가 시작되었으므로(지금 이 측이 시작), 반대편의 서브 타이머를 초기화
+    if (isPos) {
+      dualNegativeSubRemaining.value = Math.min(subTurnLimitSeconds, dualNegativeTime.value)
+    } else {
+      dualPositiveSubRemaining.value = Math.min(subTurnLimitSeconds, dualPositiveTime.value)
+    }
+
     runningRef.value = true
     setMain(
       setInterval(() => {
@@ -675,8 +680,7 @@ export const useSSUTimer = () => {
       }, 1000),
     )
 
-    // 서브 타이머 시작
-    subRemainRef.value = Math.min(subTurnLimitSeconds, timeRef.value)
+    // 서브 타이머 시작 (같은 편 재시작 시 남은 시간을 유지)
     if (subInterval) clearInterval(subInterval)
     setSub(
       setInterval(() => {
