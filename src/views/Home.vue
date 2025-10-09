@@ -22,6 +22,11 @@
         <img :src="heroImage" alt="만장일치 로고" />
       </div>
     </section>
+
+    <footer class="contact-footer">
+      <div class="contact-left">개발자 연락처</div>
+      <div class="contact-right">이메일: hyunjiseung0x@gmail.com</div>
+    </footer>
   </div>
 </template>
 
@@ -32,8 +37,11 @@ import naverCafeLogo from '@/assets/naver_cafe.webp'
 
 <style scoped>
 .home {
-  min-height: 100vh;
+  min-height: 100%;
   padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
 }
 
 .hero {
@@ -119,6 +127,55 @@ import naverCafeLogo from '@/assets/naver_cafe.webp'
   .hero-image img {
     width: 160px;
     height: 160px;
+  }
+}
+
+/* ----- 연락처 푸터 영역 ----- */
+.contact-footer {
+  /* 화면 가로 전체를 차지 */
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  padding: 1.25rem 1.5rem;
+  border-top: 1px solid rgba(74, 144, 226, 0.2);
+  color: #4b5563;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: auto;
+}
+
+.contact-left {
+  font-size: 0.95rem;
+}
+
+.contact-right {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.contact-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  background: var(--light-blue);
+  color: var(--primary-blue);
+  border: 1px solid rgba(74, 144, 226, 0.25);
+  font-size: 0.85rem;
+}
+
+.contact-chip a {
+  color: inherit;
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  .contact-footer {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 </style>

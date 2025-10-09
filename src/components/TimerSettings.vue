@@ -83,7 +83,7 @@ const onSecondsChange = (index: number, e: Event) => {
 
 <style scoped>
 .timer-settings {
-  margin-top: 1.5rem;
+  margin-top: 3rem;
   padding: 1.5rem 1.5rem 1rem;
   background: #f8fafc;
   border-radius: 16px;
@@ -97,42 +97,59 @@ const onSecondsChange = (index: number, e: Event) => {
 }
 
 .settings-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-  gap: 1rem 1rem;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.75rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 0.25rem;
+  -webkit-overflow-scrolling: touch;
 }
 
 .setting-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem;
   background: #ffffff;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
+  box-sizing: border-box;
+  min-width: 200px;
+  /* width: clamp(320px, 34vw, 380px); */
+  width: 200px;
+  flex: 0 0 auto;
 }
 
 .setting-item label {
   color: #111827;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 1rem;
-  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+  margin-bottom: 0.1rem;
 }
 
 .input-group {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.4rem;
+  min-width: 0;
 }
 
 .duration-input {
-  width: 66;
-  height: 44px;
-  padding: 0.55rem 0.75rem;
+  width: 56px;
+  height: 36px;
+  padding: 0.45rem 0.5rem;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   text-align: center;
-  font-size: 1.05rem;
+  font-size: 1rem;
+  box-sizing: border-box;
 }
 
 .duration-input:focus {
@@ -143,9 +160,11 @@ const onSecondsChange = (index: number, e: Event) => {
 
 .unit {
   color: #6b7280;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
+  margin: 0 2px;
 }
 
+/* 모바일 (단일 열) 보장 */
 @media (max-width: 640px) {
   .settings-grid {
     grid-template-columns: 1fr;

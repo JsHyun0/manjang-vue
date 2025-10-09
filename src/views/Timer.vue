@@ -34,6 +34,46 @@
 
         <TimerSettings :phases="preparePhases" @update-phase="updatePhaseDuration" />
 
+        <!-- SSU 전용: 토론자 입력 옵션 -->
+        <div v-if="selectedMode === 'ssu'" class="debater-input-option">
+          <label class="debater-input-checkbox">
+            <input type="checkbox" v-model="enableDebaterInput" />
+            토론자 입력
+          </label>
+
+          <div v-if="enableDebaterInput" class="debater-inputs">
+            <!-- 긍정: 상단, 2열 -->
+            <div class="debater-side">
+              <h4>긍정</h4>
+              <div class="debater-input-row">
+                <input
+                  v-for="idx in 3"
+                  :key="`pos-name-${idx}`"
+                  class="debater-name-input"
+                  type="text"
+                  v-model="debaterNames.positive[idx - 1]"
+                  :placeholder="`토론자 ${idx}`"
+                />
+              </div>
+            </div>
+
+            <!-- 부정: 하단, 2열 -->
+            <div class="debater-side">
+              <h4>부정</h4>
+              <div class="debater-input-row">
+                <input
+                  v-for="idx in 3"
+                  :key="`neg-name-${idx}`"
+                  class="debater-name-input"
+                  type="text"
+                  v-model="debaterNames.negative[idx - 1]"
+                  :placeholder="`토론자 ${idx}`"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="prepare-actions">
           <button class="control-btn back" @click="backToSelection">뒤로</button>
           <button class="control-btn start" @click="startDebate">시작</button>
@@ -42,7 +82,10 @@
 
       <!-- 공통 단계 상단바 (SSU/자유 공용) -->
       <div v-if="stage === 'run'" class="step-topbar">
-        <div class="step-buttons">
+        <div
+          class="step-buttons"
+          :style="{ gridTemplateColumns: `repeat(${activeSteps.length}, 1fr)` }"
+        >
           <button
             v-for="(step, i) in activeSteps"
             :key="`topbar-step-${i}`"
@@ -88,7 +131,7 @@
                     <path d="M4 20c0-4.2 4.2-6.5 8-6.5s8 2.3 8 6.5" />
                   </svg>
                 </div>
-                <span class="debater-label">토론자 {{ i }}</span>
+                <span class="debater-label">{{ getDebaterLabel('positive', i) }}</span>
               </div>
             </div>
 
@@ -314,7 +357,7 @@
                     <path d="M4 20c0-4.2 4.2-6.5 8-6.5s8 2.3 8 6.5" />
                   </svg>
                 </div>
-                <span class="debater-label">토론자 {{ i }}</span>
+                <span class="debater-label">{{ getDebaterLabel('negative', i) }}</span>
               </div>
             </div>
 
@@ -366,7 +409,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useSSUTimer, defaultCEDASteps } from '@/lib/timer'
 import TimerSettings from '@/components/TimerSettings.vue'
 
@@ -439,9 +483,25 @@ const selectedMode = ref<null | 'free' | 'ssu'>(null)
 
 type PreparePhase = { name: string; duration: number } // duration in seconds
 const preparePhases = ref<PreparePhase[]>([])
+// 각 실제 단계가 어떤 그룹(양측 통합 단계)에 속하는지 보관
+const prepareStepGroups = ref<string[]>([])
 
 // 논제 입력
 const debateTopic = ref<string>('')
+
+// 토론자 입력 옵션 및 이름 상태 (기본 비활성)
+const enableDebaterInput = ref<boolean>(false)
+const debaterNames = reactive<{ positive: string[]; negative: string[] }>({
+  positive: ['', '', ''],
+  negative: ['', '', ''],
+})
+
+function getDebaterLabel(side: 'positive' | 'negative', index1Based: number): string {
+  const arr = debaterNames[side]
+  const name = arr[index1Based - 1]?.trim()
+  if (!enableDebaterInput.value || !name) return `토론자 ${index1Based}`
+  return name
+}
 
 // === 뷰 전용 컴퓨티드 (조건 단순화) ===
 const isSsuMode = computed(() => timerType.value === 'ssu')
@@ -492,18 +552,27 @@ const adjustDualTime = (deltaSeconds: number) => {
 
 const handleSelectMode = (mode: 'free' | 'ssu') => {
   selectedMode.value = mode
-  if (mode === 'free') {
-    // 자유토론 모드에서도 준비 화면은 CEDA 단계 리스트를 기반으로 노출
-    preparePhases.value = defaultCEDASteps.map((step) => ({
-      name: step.title,
-      duration: Math.max(1, step.duration),
-    }))
-  } else {
-    preparePhases.value = ssuSteps.value.map((step) => ({
-      name: step.title,
-      duration: Math.max(1, step.duration),
-    }))
+  const sourceSteps =
+    mode === 'free'
+      ? defaultCEDASteps.map((s) => ({ title: s.title, duration: s.duration }))
+      : ssuSteps.value.map((s) => ({ title: s.title, duration: s.duration }))
+
+  // 단계명 정규화: '긍정 ', '부정 ' 접두어 제거하여 양측 동일 단계로 그룹화
+  const normalizeStepTitle = (title: string) => title.replace(/^긍정\s+|^부정\s+/, '').trim()
+
+  const seen = new Set<string>()
+  const grouped: PreparePhase[] = []
+  const groupsPerStep: string[] = []
+  for (const step of sourceSteps) {
+    const norm = normalizeStepTitle(step.title)
+    groupsPerStep.push(norm)
+    if (!seen.has(norm)) {
+      seen.add(norm)
+      grouped.push({ name: norm, duration: Math.max(1, step.duration) })
+    }
   }
+  preparePhases.value = grouped
+  prepareStepGroups.value = groupsPerStep
   stage.value = 'prepare'
 }
 
@@ -517,12 +586,19 @@ const updatePhaseDuration = (index: number, durationSeconds: number) => {
 
 const startDebate = () => {
   if (!selectedMode.value) return
+  // 그룹(양측 통합 단계) → 전체 단계로 확장 적용
+  const groupDurationMap: Record<string, number> = {}
+  preparePhases.value.forEach((p) => {
+    groupDurationMap[p.name] = Math.max(1, p.duration)
+  })
+
   if (selectedMode.value === 'free') {
-    const durationsSeconds = preparePhases.value.map((p) => Math.max(1, p.duration))
+    // CEDA 전체 단계 수에 맞게 그룹 시간을 펼쳐서 적용
+    const durationsSeconds = prepareStepGroups.value.map((g) => groupDurationMap[g] ?? 60)
     setCEDAStepDurations(durationsSeconds)
     selectTimerType('free')
   } else {
-    const durationsSeconds = preparePhases.value.map((p) => Math.max(1, p.duration))
+    const durationsSeconds = prepareStepGroups.value.map((g) => groupDurationMap[g] ?? 60)
     setSSUStepDurations(durationsSeconds)
     selectTimerType('ssu')
   }
@@ -587,6 +663,27 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown)
 })
+
+// === 상단바에서 타이머 버튼 재클릭 시 강제 랜딩 이동 처리 ===
+const route = useRoute()
+const router = useRouter()
+const handleResetFromQuery = () => {
+  const reset = route.query.reset
+  if (reset === '1') {
+    selectedMode.value = null
+    stage.value = 'select'
+    returnToSelection()
+    // 쿼리 정리 (같은 페이지 내 반복 클릭 시 깔끔하게 유지)
+    router.replace({ path: '/timer' })
+  }
+}
+
+// 동일 라우트 내 재클릭을 위해 timestamp 쿼리를 트리거로 사용
+watch(
+  () => route.query.ts,
+  () => handleResetFromQuery(),
+  { immediate: true },
+)
 </script>
 
 <style scoped>
@@ -602,8 +699,8 @@ onBeforeUnmount(() => {
 
 .timer-container {
   width: 100%;
-  max-width: 1600px;
-  padding: 1rem 2rem;
+  max-width: 100vw;
+  padding: 0.5rem 1rem;
   display: grid;
   grid-template-rows: auto 1fr auto; /* 상단바 / 메인 / 하단바 */
   min-height: 100vh;
@@ -621,6 +718,8 @@ onBeforeUnmount(() => {
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
   padding: 0.6rem 1rem;
+  display: flex;
+  justify-content: center;
 }
 
 /* 모드 선택 스타일 */
@@ -710,6 +809,57 @@ onBeforeUnmount(() => {
   margin-bottom: 1.25rem;
 }
 
+/* 토론자 입력 옵션 */
+.debater-input-option {
+  margin: 3rem 0 1.2rem;
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #ffffff;
+  display: inline-block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.debater-input-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  color: #374151;
+}
+
+.debater-inputs {
+  margin-top: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  width: max-content;
+}
+
+.debater-side {
+  width: max-content;
+}
+
+.debater-side h4 {
+  margin: 0 0 0.5rem 0;
+  color: var(--primary-blue);
+}
+
+.debater-input-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+}
+
+.debater-name-input {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  width: 150px;
+}
+
 .prepare-actions {
   margin-top: 1.5rem;
   display: flex;
@@ -778,7 +928,7 @@ onBeforeUnmount(() => {
 .timer-main.ssu-mode {
   justify-content: space-between;
   /* 좌/우 토론자 영역 고정폭 변수 (중앙 논제와 동기화) */
-  --debater-width: 300px;
+  --debater-width: clamp(300px, 20vw, 380px);
 }
 
 /* 자유토론 듀얼 타이머 단계 전용 레이아웃 */
@@ -793,7 +943,8 @@ onBeforeUnmount(() => {
 .timer-main:not(.ssu-mode) {
   flex-direction: column;
   align-items: stretch;
-  justify-content: flex-start;
+  justify-content: center;
+  padding: 2rem 0 0.5rem;
 }
 
 /* 자유토론 듀얼 타이머 */
@@ -818,6 +969,7 @@ onBeforeUnmount(() => {
 .timer-main:not(.ssu-mode) .timer-display {
   margin: 0 auto;
   padding-top: 0.5rem;
+  flex: 0 0 auto;
 }
 
 .rect-timer {
@@ -942,7 +1094,7 @@ onBeforeUnmount(() => {
   font-weight: 800;
   color: #1f2937;
   line-height: 1.25;
-  font-size: 2rem;
+  font-size: 2.4rem;
   word-break: keep-all;
   pointer-events: none;
 }
@@ -986,7 +1138,7 @@ onBeforeUnmount(() => {
 .debater-icons {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 4rem;
   align-items: center;
 }
 
@@ -994,7 +1146,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.3rem;
 }
 
 .debater-icon.highlight .avatar {
@@ -1010,8 +1162,8 @@ onBeforeUnmount(() => {
 }
 
 .avatar {
-  width: 72px;
-  height: 72px;
+  width: 100px;
+  height: 100px;
   border-radius: 50%;
   background: linear-gradient(135deg, #4a90e2, #357abd);
   display: flex;
@@ -1022,15 +1174,15 @@ onBeforeUnmount(() => {
 }
 
 .avatar-icon {
-  width: 38px;
-  height: 38px;
+  width: 54px;
+  height: 54px;
   fill: rgba(255, 255, 255, 0.95);
   stroke: rgba(255, 255, 255, 0.95);
   stroke-width: 1.5;
 }
 
 .debater-label {
-  font-size: 1.05rem;
+  font-size: 1.25rem;
   color: #444;
   font-weight: 700;
 }
@@ -1039,8 +1191,8 @@ onBeforeUnmount(() => {
 .usage-counters {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  margin-top: 3rem;
+  gap: 0.5rem;
+  margin-top: 1rem;
   padding: 0.5rem;
   background: rgba(255, 255, 255, 0.8);
   border-radius: 8px;
@@ -1087,7 +1239,7 @@ onBeforeUnmount(() => {
 .counter-display {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   user-select: none;
   -webkit-user-select: none;
   -moz-user-select: none;
@@ -1096,7 +1248,7 @@ onBeforeUnmount(() => {
 
 .counter-dots {
   display: flex;
-  gap: 0.6rem;
+  gap: 0.4rem;
   user-select: none;
   -webkit-user-select: none;
   -moz-user-select: none;
@@ -1104,8 +1256,8 @@ onBeforeUnmount(() => {
 }
 
 .dot {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background-color: #ddd;
   cursor: pointer;
@@ -1141,7 +1293,7 @@ onBeforeUnmount(() => {
 }
 
 .counter-text {
-  font-size: 0.7rem;
+  font-size: 0.9rem;
   color: #555;
   font-weight: 600;
   background: #f8f9fa;
@@ -1159,15 +1311,15 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  max-width: 400px;
-  margin-top: 2rem;
+  max-width: 520px;
+  margin-top: 1rem;
 }
 
 .step-buttons {
-  display: grid;
-  grid-template-columns: repeat(10, 1fr);
-  gap: 0.6rem;
-  width: 100%;
+  display: inline-grid;
+  justify-content: center;
+  gap: 0.4rem;
+  width: auto;
   /* 상단바 확장에 맞춰 버튼 영역도 더 넓게 */
   max-width: min(1800px, 100vw - 2rem);
   margin: 0 auto;
@@ -1175,13 +1327,13 @@ onBeforeUnmount(() => {
 
 .step-dot {
   appearance: none;
-  border: 2px solid var(--primary-blue);
+  border: 2px solid #e1e1e1;
   background: white;
-  color: var(--primary-blue);
+  /* color: var(--primary-blue); */
   border-radius: 12px;
-  font-weight: 800;
-  font-size: 0.8rem;
-  padding: 0.5rem 0;
+  font-weight: 600;
+  font-size: 1rem;
+  padding: 0.4rem 0;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -1194,18 +1346,19 @@ onBeforeUnmount(() => {
 .step-dot.active {
   background: var(--primary-blue);
   color: white;
+  font-weight: 800;
 }
 
 .timer-circle {
-  width: 300px;
-  height: 300px;
+  width: clamp(360px, 28vw, 520px);
+  height: clamp(360px, 28vw, 520px);
   border-radius: 50%;
   background: white;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
   box-shadow: 0 20px 40px rgba(74, 144, 226, 0.2);
   position: relative;
   overflow: hidden;
@@ -1278,18 +1431,18 @@ onBeforeUnmount(() => {
 }
 
 .progress-svg {
-  width: 300px;
-  height: 300px;
+  width: clamp(360px, 28vw, 520px);
+  height: clamp(360px, 28vw, 520px);
   transform: rotate(-90deg) scaleY(-1);
 }
 
 .progress-ring-background {
   stroke: #e9ecef;
-  stroke-width: 4;
+  stroke-width: 8;
 }
 
 .progress-ring-progress {
-  stroke-width: 4;
+  stroke-width: 8;
   stroke-linecap: round;
   transition: stroke-dashoffset 0.8s ease;
 }
@@ -1304,20 +1457,20 @@ onBeforeUnmount(() => {
 }
 
 .time-text {
-  font-size: 4rem;
+  font-size: 6rem;
   font-weight: 700;
   color: var(--primary-blue);
-  margin-bottom: 0.8rem;
+  margin-bottom: 0.4rem;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .timer-label {
-  font-size: 1.4rem;
+  font-size: 1.8rem;
   color: #555;
   font-weight: 600;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.2rem;
   text-align: center;
-  max-width: 240px;
+  max-width: 320px;
   line-height: 1.3;
 }
 
@@ -1335,14 +1488,14 @@ onBeforeUnmount(() => {
 .timer-controls {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1rem;
   justify-content: center;
   align-items: center;
 }
 
 .control-row {
   display: flex;
-  gap: 0.8rem;
+  gap: 0.5rem;
   justify-content: center;
   align-items: center;
   flex-wrap: wrap;
@@ -1350,10 +1503,10 @@ onBeforeUnmount(() => {
 }
 
 .control-btn {
-  padding: 0.8rem 1.2rem;
+  padding: 0.7rem 1rem;
   border: none;
   border-radius: 8px;
-  font-size: 0.9rem;
+  font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -1413,7 +1566,7 @@ onBeforeUnmount(() => {
 }
 
 .control-btn .icon {
-  font-size: 0.9rem;
+  font-size: 1.1rem;
 }
 
 /* 반응형 디자인 */
