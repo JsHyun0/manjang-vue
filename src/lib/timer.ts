@@ -31,14 +31,14 @@ export interface ActiveSpeakers {
 }
 
 export const defaultCEDASteps: CEDAStep[] = [
-  { title: '긍정 입론', duration: 60 }, // 3분
+  { title: '긍정 입론', duration: 90 }, // 1분 30초
   { title: '부정 입론 교차조사', duration: 90 }, // 2분 30초
-  { title: '부정 입론', duration: 60 }, // 3분
+  { title: '부정 입론', duration: 90 }, // 3분
   { title: '긍정 입론 교차조사', duration: 90 }, // 2분 30초
   { title: '숙의 시간', duration: 30 },
   { title: '자유 토론', duration: 480 },
-  { title: '긍정 최종발언', duration: 60 }, // 2분 30초
-  { title: '부정 최종발언', duration: 60 }, // 2분 30초
+  { title: '긍정 최종발언', duration: 90 }, // 1분 30초
+  { title: '부정 최종발언', duration: 90 }, // 1분 30초
 ]
 
 // 기본 SSU 단계 정의 (불변 기본값)
@@ -50,7 +50,7 @@ export const defaultSSUSteps: SSUStep[] = [
   { title: '긍정 반박', duration: 180 }, // 3분
   { title: '부정 반박 교차조사', duration: 120 }, // 2분
   { title: '부정 반박', duration: 180 }, // 3분
-  { title: '긍정 반박 교차조사', duration: 150 }, // 2분 30초
+  { title: '긍정 반박 교차조사', duration: 120 }, // 2분
   { title: '긍정 최종발언', duration: 150 }, // 2분 30초
   { title: '부정 최종발언', duration: 150 }, // 2분 30초
 ]

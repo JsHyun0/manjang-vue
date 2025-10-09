@@ -18,6 +18,17 @@ function onLogout() {
   menuOpen.value = false
   router.push('/home')
 }
+
+function goToTimerReset() {
+  const ts = Date.now().toString()
+  const location = { path: '/timer', query: { reset: '1', ts } }
+  const current = router.currentRoute.value
+  if (current.path === '/timer') {
+    router.replace(location)
+  } else {
+    router.push(location)
+  }
+}
 </script>
 
 <template>
@@ -30,7 +41,9 @@ function onLogout() {
         </router-link>
 
         <div class="nav-menu">
-          <router-link to="/timer" class="nav-link">타이머</router-link>
+          <router-link to="/timer" class="nav-link" @click.prevent="goToTimerReset"
+            >타이머</router-link
+          >
           <router-link to="/reservation" class="nav-link">예약</router-link>
           <router-link to="/record" class="nav-link">기록</router-link>
           <router-link v-if="!isLoggedIn" to="/login" class="nav-link login-btn"
@@ -58,8 +71,8 @@ function onLogout() {
 .navbar {
   background: white;
   box-shadow: 0 2px 10px rgba(74, 144, 226, 0.1);
-  position: sticky;
-  top: 0;
+  /* 플로팅(따라오는) 동작 제거 */
+  position: static;
   z-index: 100;
 }
 
@@ -182,6 +195,8 @@ function onLogout() {
 
 .main-content {
   min-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
 }
 
 @media (max-width: 768px) {
