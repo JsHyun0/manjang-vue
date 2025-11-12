@@ -28,10 +28,17 @@
               class="event-item"
               :title="`${ev.name}  ${ev.startTime}`"
             >
-              <span class="event-name">{{ ev.name }}</span>
-              <span class="event-time">{{ ev.startTime }}</span>
+              <template v-if="!isNameOnly(day.date)">
+                <span class="event-name">{{ truncateName(ev.name) }}</span>
+                <span class="event-time">{{ ev.startTime }}</span>
+              </template>
+              <template v-else>
+                <span class="event-name">{{ truncateName(ev.name) }}</span>
+              </template>
             </div>
-            <div v-if="extraCount(day.date) > 0" class="event-more" title="더 보기">+@</div>
+            <div v-if="extraCount(day.date) > 0" class="event-more" title="더 보기">
+              +{{ extraCount(day.date) }}
+            </div>
           </div>
         </div>
       </div>
@@ -40,6 +47,7 @@
 </template>
 
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref, computed } from 'vue'
 import { weekdays } from '@/lib/calendar'
 import type { CalendarDay } from '@/lib/calendar'
 
@@ -81,14 +89,60 @@ const selectDate = (date: Date) => {
   }
 }
 
+// 반응형: 모바일에서는 표시 가능한 이벤트 수를 줄여 가독성 확보
+const isMobile = ref(false)
+const updateIsMobile = () => {
+  if (typeof window !== 'undefined' && 'matchMedia' in window) {
+    isMobile.value = window.matchMedia('(max-width: 450px)').matches
+  }
+}
+onMounted(() => {
+  updateIsMobile()
+  if (typeof window !== 'undefined' && 'matchMedia' in window) {
+    const mq = window.matchMedia('(max-width: 450px)')
+    const handler = () => updateIsMobile()
+    mq.addEventListener?.('change', handler)
+    // onBeforeUnmount에서 제거하기 위해 참조 저장
+    ;(updateIsMobile as any)._mq = mq
+    ;(updateIsMobile as any)._handler = handler
+  }
+})
+onBeforeUnmount(() => {
+  const mq = (updateIsMobile as any)._mq as MediaQueryList | undefined
+  const handler = (updateIsMobile as any)._handler as ((this: MediaQueryList, ev: MediaQueryListEvent) => any) | undefined
+  if (mq && handler) {
+    mq.removeEventListener?.('change', handler)
+  }
+})
+const mobileVisibleCount = (date: Date): number => {
+  if (!isMobile.value) return 3
+  const total = props.getReservations(date).length
+  if (total <= 2) return total
+  if (total === 3) return 3
+  return 3 // 4개 이상이면 3개까지 표시 후 +n
+}
+
+const isNameOnly = (date: Date): boolean => {
+  if (!isMobile.value) return false
+  const total = props.getReservations(date).length
+  return total >= 3
+}
+
 const limitedEvents = (date: Date) => {
   const list = props.getReservations(date)
-  return list.slice(0, 3)
+  return list.slice(0, mobileVisibleCount(date))
 }
 
 const extraCount = (date: Date) => {
   const list = props.getReservations(date)
-  return Math.max(0, list.length - 3)
+  if (!isMobile.value) return Math.max(0, list.length - 3)
+  if (list.length >= 4) return list.length - 3
+  return 0
+}
+
+const truncateName = (name: string): string => {
+  if (!name) return ''
+  return name.length > 3 ? name.slice(0, 3) : name
 }
 </script>
 
@@ -156,18 +210,23 @@ const extraCount = (date: Date) => {
 }
 
 .weekday {
-  padding: 1rem;
+  padding: 0.85rem;
   text-align: center;
   font-weight: 600;
+  font-size: 0.9rem;
 }
 
 .days {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
+  /* 콘텐츠 최소폭으로 인해 트랙이 밀리는 것을 방지 */
+  min-width: 0;
 }
 
 .day {
   height: 124px;
+  /* 그리드 아이템이 자식 콘텐츠 폭 때문에 컬럼을 밀지 않도록 */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -236,7 +295,7 @@ const extraCount = (date: Date) => {
   top: 6px;
   right: 6px;
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 /* 이벤트 리스트 */
@@ -245,14 +304,16 @@ const extraCount = (date: Date) => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 
 .event-item {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 6px;
-  font-size: 0.75rem;
-  line-height: 1.1rem;
+  font-size: 0.7rem;
+  line-height: 0.95rem;
   color: #0f172a;
   white-space: nowrap;
   overflow: hidden;
@@ -261,16 +322,17 @@ const extraCount = (date: Date) => {
 
 .event-time {
   display: inline-block;
-  min-width: 40px;
-  padding: 2px 6px;
-  border-radius: 6px;
-  background: #e7f0ff;
-  color: #0b4dbb;
+  flex: 0 0 auto; /* 시간 뱃지가 줄지 않도록 고정 */
+  min-width: auto;
+  padding: 0;
+  background: transparent; /* 배경 제거 */
+  color: #0b3fa1;
   font-weight: 700;
 }
 
 .event-name {
   flex: 1 1 auto;
+  min-width: 0; /* ellipsis가 정상 동작하도록 최소폭 해제 */
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -293,21 +355,21 @@ const extraCount = (date: Date) => {
   }
 
   .weekday {
-    padding: 0.5rem;
-    font-size: 0.8rem;
+    padding: 0.45rem;
+    font-size: 0.78rem;
   }
 
   .days {
     grid-template-columns: repeat(7, 1fr);
   }
   .day {
-    height: 92px;
+    height: 88px;
     padding: 4px 6px 6px 6px;
   }
   .day-number {
     top: 4px;
     right: 4px;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
   }
 
   .events {
@@ -315,34 +377,40 @@ const extraCount = (date: Date) => {
     gap: 3px;
   }
   .event-item {
-    font-size: 0.7rem;
-    line-height: 1rem;
-    gap: 4px;
+    font-size: 0.55rem;
+    line-height: 0.95rem;
+    gap: 1px;
   }
   .event-time {
-    min-width: 34px;
-    padding: 1px 4px;
-    border-radius: 5px;
+    min-width: auto;
+    padding: 0;
     font-weight: 700;
   }
 }
 
-@media (max-width: 420px) {
+@media (max-width: 450px) {
   .calendar-header h3 {
     font-size: 0.95rem;
   }
   .day {
-    height: 84px;
+    height: 85px;
   }
   .events {
     margin-top: 16px;
   }
   .event-item {
-    font-size: 0.68rem;
+    font-size: 0.55rem;
+    flex-direction: column; /* 모바일에서 두 줄(시간/이름) */
+    align-items: flex-start;
   }
   .event-time {
-    min-width: 32px;
-    font-size: 0.68rem;
+    min-width: auto;
+    font-size: 0.6rem;
+    line-height: 0.85rem;
+  }
+  .event-name {
+    font-size: 0.6rem;
+    line-height: 0.9rem;
   }
 }
 
@@ -352,17 +420,17 @@ const extraCount = (date: Date) => {
     font-size: 0.75rem;
   }
   .day {
-    height: 78px;
+    height: 88px;
   }
   .day-number {
     font-size: 0.8rem;
   }
   .event-item {
-    font-size: 0.65rem;
+    font-size: 0.6rem;
   }
   .event-time {
-    min-width: 30px;
-    font-size: 0.65rem;
+    min-width: auto;
+    font-size: 0.6rem;
   }
 }
 </style>
