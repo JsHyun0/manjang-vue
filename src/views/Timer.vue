@@ -138,7 +138,7 @@
             <!-- 사용 횟수 표시 -->
             <div class="usage-counters">
               <!-- 보충질의 -->
-              <div class="counter-item" @click="handleSupplementCounterClick('positive')">
+              <div class="counter-item">
                 <h4>보충질의</h4>
                 <div class="counter-display">
                   <div class="counter-dots">
@@ -152,6 +152,10 @@
                   <span class="counter-text"
                     >{{ usageCounters.positive.supplementaryQuestion }}/3</span
                   >
+                  <div class="counter-arrows">
+                    <button class="arrow-btn up" @click.stop="incrementSupplement('positive')">▲</button>
+                    <button class="arrow-btn down" @click.stop="decrementSupplement('positive')">▼</button>
+                  </div>
                 </div>
               </div>
 
@@ -266,6 +270,18 @@
                 다음 →
               </button>
             </div>
+              <div
+                class="control-row secondary"
+                v-if="timerType === 'ssu' && showCenterTimer && !isSupplementTime && !isStrategyTime"
+              >
+                <button
+                  class="control-btn question"
+                  @click="handleStartSupplement"
+                  :disabled="!isRunning || isIntroCrossExamStep"
+                >
+                  보충질의
+                </button>
+              </div>
 
             <div class="control-row secondary" v-if="timerType === 'ssu' && isStrategyTime">
               <button class="control-btn strategy" @click="cancelStrategyTime()">
@@ -364,7 +380,7 @@
             <!-- 사용 횟수 표시 -->
             <div class="usage-counters">
               <!-- 보충질의 -->
-              <div class="counter-item" @click="handleSupplementCounterClick('negative')">
+              <div class="counter-item">
                 <h4>보충질의</h4>
                 <div class="counter-display">
                   <div class="counter-dots">
@@ -378,6 +394,10 @@
                   <span class="counter-text"
                     >{{ usageCounters.negative.supplementaryQuestion }}/3</span
                   >
+                  <div class="counter-arrows">
+                    <button class="arrow-btn up" @click.stop="incrementSupplement('negative')">▲</button>
+                    <button class="arrow-btn down" @click.stop="decrementSupplement('negative')">▼</button>
+                  </div>
                 </div>
               </div>
 
@@ -518,6 +538,13 @@ const showStepButtons = computed(
     showCenterTimer.value,
 )
 
+// SSU 'NN 교차조사' 단계에서는 보충질의 버튼 비활성화
+const isIntroCrossExamStep = computed(() => {
+  if (timerType.value !== 'ssu') return false
+  const title = currentStepInfo.value?.title || ''
+  return title.includes('교차조사')
+})
+
 // 듀얼 타이머 시간 수정 팝업 상태 및 로직
 const showAdjustModal = ref(false)
 const adjustTargetSide = ref<null | 'positive' | 'negative'>(null)
@@ -628,13 +655,23 @@ const handleStrategyCounterClick = (side: 'positive' | 'negative') => {
   startStrategyTime(side)
 }
 
-// 보충질의: 본 타이머 재생 중일 때만 진입, 다른 오버레이 타이머와 상호 배제
-const handleSupplementCounterClick = (side: 'positive' | 'negative') => {
+// 보충질의 카운터 증감
+const incrementSupplement = (side: 'positive' | 'negative') => {
+  const current = usageCounters[side].supplementaryQuestion
+  usageCounters[side].supplementaryQuestion = Math.min(3, current + 1)
+}
+const decrementSupplement = (side: 'positive' | 'negative') => {
+  const current = usageCounters[side].supplementaryQuestion
+  usageCounters[side].supplementaryQuestion = Math.max(0, current - 1)
+}
+
+// 보충질의 시작 버튼
+const handleStartSupplement = () => {
   if (timerType.value !== 'ssu') return
   if (!isRunning.value) return
+  if (isIntroCrossExamStep.value) return
   if (isStrategyTime.value || isSupplementTime.value) return
-  toggleUsage(side, 'supplementaryQuestion')
-  startSupplementTime(side)
+  startSupplementTime()
 }
 
 // ====== 키보드 조작: 듀얼 타이머에서 좌/우 화살표로 발언 전환 ======
@@ -1303,6 +1340,31 @@ watch(
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
+}
+
+/* 보충질의 카운터 화살표 */
+.counter-arrows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: 0.2rem;
+}
+.arrow-btn {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #374151;
+  font-size: 0.7rem;
+  line-height: 1;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.arrow-btn:hover {
+  background: rgba(74, 144, 226, 0.08);
+}
+.arrow-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* 타이머 디스플레이 */
