@@ -213,4 +213,36 @@ function goToTimerReset() {
     font-size: 0.9rem;
   }
 }
+
+@media (max-width: 450px) {
+  .nav-container {
+    padding: 0.6rem 0.75rem;
+    gap: 0.5rem;
+  }
+  .nav-logo {
+    font-size: 1rem;
+  }
+  .nav-menu {
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .nav-link {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.8rem;
+  }
+  .nav-link::after {
+    left: 8px;
+    right: 8px;
+    bottom: 4px;
+    height: 2px;
+  }
+  .login-btn {
+    border-radius: 16px;
+  }
+  .user-pill {
+    padding: 0.4rem 0.6rem;
+    border-radius: 14px;
+    font-size: 0.82rem;
+  }
+}
 </style>

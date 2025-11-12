@@ -40,21 +40,19 @@
         </div>
       </div>
 
-      <div class="card mb">
-        <div class="card-content">
-          <Calendar
-            :currentYear="currentYear"
-            :currentMonth="currentMonth"
-            :calendarDays="calendarDays"
-            :selectedDate="selectedDateObj"
-            :hasReservation="hasReservation"
-            :getReservations="getReservationsForDate"
-            :isToday="isToday"
-            :isPastDate="isPastDate"
-            @change-month="changeMonth"
-            @select-date="onSelectCalendarDate"
-          />
-        </div>
+      <div class="calendar-full mb">
+        <Calendar
+          :currentYear="currentYear"
+          :currentMonth="currentMonth"
+          :calendarDays="calendarDays"
+          :selectedDate="selectedDateObj"
+          :hasReservation="hasReservation"
+          :getReservations="getReservationsForDate"
+          :isToday="isToday"
+          :isPastDate="isPastDate"
+          @change-month="changeMonth"
+          @select-date="onSelectCalendarDate"
+        />
       </div>
 
       <div class="card" v-show="isCardContentVisible">
@@ -623,6 +621,13 @@ const onSelectCalendarDate = (date: Date) => {
 .card-content {
   padding: 1rem;
 }
+.calendar-full {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
 .toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -881,12 +886,17 @@ const onSelectCalendarDate = (date: Date) => {
 
 /* Timeline */
 .timeline-container {
-  --slot-width: 84px;
+  --slot-width: 40px;
   overflow-x: auto;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   background: #ffffff;
   user-select: none;
+}
+@media (max-width: 450px) {
+  .timeline-container {
+    --slot-width: 28px; /* 모바일에서 한 화면에 더 많은 시간 표시 */
+  }
 }
 
 .timeline-grid {
