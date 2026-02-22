@@ -20,11 +20,35 @@ See [Vite Configuration Reference](https://vite.dev/config/).
 npm install
 ```
 
+### Environment Variables
+
+Create `manjang-vue/.env` with:
+
+```sh
+VITE_SUPABASE_URL=your_supabase_project_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_API_BASE=http://localhost:8000
+```
+
 ### Compile and Hot-Reload for Development
 
 ```sh
 npm run dev
 ```
+
+### Run Frontend + Backend Together (Local)
+
+From project root (`/Users/hyeonjiseung/dev/manjang`):
+
+```sh
+./dev-local.sh
+```
+
+This starts:
+- Backend: `http://127.0.0.1:8000`
+- Frontend: `http://127.0.0.1:5173`
+
+Stop both with `Ctrl+C`.
 
 ### Type-Check, Compile and Minify for Production
 

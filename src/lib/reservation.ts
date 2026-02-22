@@ -1,3 +1,5 @@
+import { supabase } from './supabaseClient'
+
 export interface ReservationSlot {
   id: string // backend uuid or memory id like "mem-..."
   date: string // YYYY-MM-DD
@@ -24,9 +26,7 @@ export const generateTimeSlots = (): string[] => {
   return slots
 }
 
-const API_BASE: string = (import.meta as any).env?.VITE_API_BASE ?? 'http://0.0.0.0:8000'
-
-type ApiReservation = {
+type ReservationRow = {
   id: string
   reserved_by?: string | null
   reserved_by_name?: string | null
@@ -41,6 +41,34 @@ const toIsoAt = (date: string, time: string) => `${date}T${time}:00Z`
 
 const parseIsoToDate = (iso: string) => new Date(iso)
 const minutesBetween = (a: Date, b: Date) => Math.round((b.getTime() - a.getTime()) / 60000)
+const toYmdUtc = (d: Date) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
+const parseYmdAsUtc = (ymd: string): Date => {
+  const [y, m, d] = ymd.split('-').map((v) => Number(v))
+  return new Date(Date.UTC(y, m - 1, d))
+}
+const addUtcDays = (ymd: string, days: number): string => {
+  const d = parseYmdAsUtc(ymd)
+  d.setUTCDate(d.getUTCDate() + days)
+  return toYmdUtc(d)
+}
+const displayNameOf = (row: ReservationRow) => row.reserved_by_name || row.reserved_by || '익명'
+const rowToSlots = (row: ReservationRow, date: string): ReservationSlot[] => {
+  const slots = generateHalfHourSlotsBetween(row.starts_at, row.ends_at)
+  const name = displayNameOf(row)
+  const title = row.title ?? null
+  return slots.map((time) => ({ id: row.id, date, timeSlot: time, name, title }))
+}
+const monthWindowFrom = (
+  anyDateInMonth: string,
+): { startIso: string; endExclusiveIso: string } => {
+  const [year, month] = anyDateInMonth.split('-').map((v) => Number(v))
+  const prevMonthStart = new Date(Date.UTC(year, month - 2, 1, 0, 0, 0))
+  const monthAfterNextStart = new Date(Date.UTC(year, month + 1, 1, 0, 0, 0))
+  return {
+    startIso: prevMonthStart.toISOString(),
+    endExclusiveIso: monthAfterNextStart.toISOString(),
+  }
+}
 
 const generateHalfHourSlotsBetween = (startIso: string, endIso: string): string[] => {
   const start = parseIsoToDate(startIso)
@@ -57,18 +85,16 @@ const generateHalfHourSlotsBetween = (startIso: string, endIso: string): string[
 
 export const listReservationsByDate = async (date: string): Promise<ReservationSlot[]> => {
   try {
-    const res = await fetch(`${API_BASE}/reservations?date=${encodeURIComponent(date)}`)
-    if (!res.ok) throw new Error(`Failed to fetch reservations: ${res.status}`)
-    const data: ApiReservation[] = await res.json()
-    const flattened: ReservationSlot[] = []
-    for (const r of data) {
-      const slots = generateHalfHourSlotsBetween(r.starts_at, r.ends_at)
-      for (const time of slots) {
-        const displayName = r.reserved_by_name || r.reserved_by || '익명'
-        const title = r.title ?? null
-        flattened.push({ id: r.id, date, timeSlot: time, name: displayName, title })
-      }
-    }
+    const dayStart = `${date}T00:00:00Z`
+    const nextDayStart = `${addUtcDays(date, 1)}T00:00:00Z`
+    const { data, error } = await supabase
+      .from('reservations')
+      .select('id,reserved_by,reserved_by_name,title,starts_at,ends_at,debate_id')
+      .gte('starts_at', dayStart)
+      .lt('starts_at', nextDayStart)
+      .order('starts_at', { ascending: true })
+    if (error) throw new Error(error.message || 'Failed to fetch reservations')
+    const flattened = (data ?? []).flatMap((row) => rowToSlots(row as ReservationRow, date))
     // merge with local memory
     const mem = memoryByDate.get(date) ?? []
     return [...flattened, ...mem]
@@ -83,14 +109,20 @@ export const listReservationsAroundMonth = async (
   anyDateInMonth: string,
 ): Promise<Record<string, ReservationSlot[]>> => {
   // returns map: YYYY-MM-DD -> slots[]
-  const res = await fetch(`${API_BASE}/reservations/month?date=${encodeURIComponent(anyDateInMonth)}`)
-  if (!res.ok) throw new Error(`Failed to fetch month reservations: ${res.status}`)
-  const data: ApiReservation[] = await res.json()
+  const { startIso, endExclusiveIso } = monthWindowFrom(anyDateInMonth)
+  const { data, error } = await supabase
+    .from('reservations')
+    .select('id,reserved_by,reserved_by_name,title,starts_at,ends_at,debate_id')
+    .gte('starts_at', startIso)
+    .lt('starts_at', endExclusiveIso)
+    .order('starts_at', { ascending: true })
+  if (error) throw new Error(error.message || 'Failed to fetch month reservations')
   const byDate: Record<string, ReservationSlot[]> = {}
-  for (const r of data) {
+  for (const row of data ?? []) {
+    const r = row as ReservationRow
     const slots = generateHalfHourSlotsBetween(r.starts_at, r.ends_at)
     const dateKey = r.starts_at.slice(0, 10) // YYYY-MM-DD
-    const displayName = r.reserved_by_name || r.reserved_by || '익명'
+    const displayName = displayNameOf(r)
     const title = r.title ?? null
     byDate[dateKey] = byDate[dateKey] ?? []
     for (const t of slots) {
@@ -147,21 +179,17 @@ export const createReservations = async (
       debate_id: null,
     }
     try {
-      const res = await fetch(`${API_BASE}/reservations`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (!res.ok) {
-        const msg = await res.text().catch(() => '')
-        // If backend table is missing or server error, store locally as a soft-fallback
-        if (res.status >= 500 || /relation .*reservations.* does not exist/i.test(msg)) {
+      const { error } = await supabase.from('reservations').insert(payload)
+      if (error) {
+        const msg = error.message || 'Failed to create reservation'
+        // If table is missing, store locally as a soft-fallback
+        if (/relation .*reservations.* does not exist/i.test(msg)) {
           addMemoryReservation(date, name, start, end, title ?? null)
           continue
         }
-        throw new Error(msg || `Failed to create reservation (${res.status})`)
+        throw new Error(msg)
       }
-    } catch (err) {
+    } catch (_err) {
       // Network or unexpected error -> soft-fallback to local memory
       addMemoryReservation(date, name, start, end, title ?? null)
     }
@@ -183,7 +211,7 @@ const addMemoryReservation = (
   const slots = generateHalfHourSlotsBetween(toIsoAt(date, startTime), toIsoAt(date, endTime))
   const groupId = `mem-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const list = memoryByDate.get(date) ?? []
-  slots.forEach((t, i) => {
+  slots.forEach((t) => {
     list.push({ id: groupId, date, timeSlot: t, name, title: title ?? null })
   })
   memoryByDate.set(date, list)
@@ -194,17 +222,14 @@ export const updateReservation = async (
   fields: { reserved_by_name?: string; title?: string | null },
 ): Promise<void> => {
   try {
-    const res = await fetch(`${API_BASE}/reservations/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        reserved_by_name: fields.reserved_by_name,
-        title: fields.title ?? null,
-      }),
-    })
-    if (!res.ok) {
-      const msg = await res.text().catch(() => '')
-      throw new Error(msg || `Failed to update reservation (${res.status})`)
+    const payload: { reserved_by_name?: string; title?: string | null } = {}
+    if (fields.reserved_by_name !== undefined) payload.reserved_by_name = fields.reserved_by_name
+    if ('title' in fields) payload.title = fields.title ?? null
+    if (Object.keys(payload).length === 0) return
+
+    const { error } = await supabase.from('reservations').update(payload).eq('id', id)
+    if (error) {
+      throw new Error(error.message || 'Failed to update reservation')
     }
   } catch (_e) {
     // memory fallback: update all slots with the same id
@@ -224,10 +249,9 @@ export const updateReservation = async (
 
 export const deleteReservation = async (id: string): Promise<void> => {
   try {
-    const res = await fetch(`${API_BASE}/reservations/${id}`, { method: 'DELETE' })
-    if (!res.ok) {
-      const msg = await res.text().catch(() => '')
-      throw new Error(msg || `Failed to delete reservation (${res.status})`)
+    const { error } = await supabase.from('reservations').delete().eq('id', id)
+    if (error) {
+      throw new Error(error.message || 'Failed to delete reservation')
     }
   } catch (_e) {
     // memory fallback: remove all slots with the same id
