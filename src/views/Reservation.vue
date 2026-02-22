@@ -55,11 +55,20 @@
         />
       </div>
 
+      <div class="card card-muted mb" v-if="!isCardContentVisible">
+        <div class="card-content">
+          <p class="hint">달력에서 날짜를 선택하면 해당 일자의 예약 현황과 시간 선택 영역이 열립니다.</p>
+        </div>
+      </div>
+
       <div class="card" v-show="isCardContentVisible">
         <div class="card-content">
           <div class="section">
-            <h3 class="section-title">예약 현황 ({{ selectedDate }})</h3>
-            <div class="timeline-container">
+            <div class="section-head">
+              <h3 class="section-title">예약 현황 ({{ selectedDate }})</h3>
+              <span v-if="isRefreshingDay || isPrefetchingMonth" class="status-chip">동기화 중</span>
+            </div>
+            <div class="timeline-container" :class="{ 'is-loading': isRefreshingDay }">
               <div
                 class="timeline-grid"
                 :style="{
@@ -79,7 +88,12 @@
                   v-for="time in timeSlots"
                   :key="'cell-' + time"
                   class="time-cell"
-                  :class="{ 'is-selected': isSelected(time), 'is-hour': time.endsWith(':00') }"
+                  :class="{
+                    'is-selected': isSelected(time),
+                    'is-hour': time.endsWith(':00'),
+                    'has-event': isReservedTime(time),
+                  }"
+                  :aria-label="`${time} 슬롯`"
                   @mousedown="onSlotMouseDown(time, $event)"
                   @mouseenter="onSlotMouseEnter(time)"
                   @mouseleave="onSlotMouseLeave(time)"
@@ -146,10 +160,17 @@
                 <input class="input" v-model="editForm.title" />
               </div>
               <div class="toolbar" style="justify-content: flex-end; padding-top: 0.5rem">
-                <button class="btn btn-ghost" @click="showEditModal = false">취소</button>
-                <button class="btn btn-primary" @click="submitUpdate">수정</button>
-                <button class="btn btn-primary" style="background: #ef4444" @click="submitDelete">
-                  삭제
+                <button class="btn btn-ghost" :disabled="isSavingEdit || isDeletingReservation" @click="showEditModal = false">취소</button>
+                <button class="btn btn-primary" :disabled="isSavingEdit || isDeletingReservation" @click="submitUpdate">
+                  {{ isSavingEdit ? '수정 중...' : '수정' }}
+                </button>
+                <button
+                  class="btn btn-primary"
+                  style="background: #ef4444"
+                  :disabled="isSavingEdit || isDeletingReservation"
+                  @click="submitDelete"
+                >
+                  {{ isDeletingReservation ? '삭제 중...' : '삭제' }}
                 </button>
               </div>
             </div>
@@ -159,15 +180,14 @@
           <div v-if="toast.visible" class="toast">{{ toast.message }}</div>
 
           <div class="inline-form">
-            <div class="form-item">
-              <label class="label">선택한 시간</label>
-              <p class="hint" v-if="selectedTimes.length">
-                {{ selectedDate }} • {{ selectedTimes.join(', ') }} ({{ selectedTimes.length }}개)
-              </p>
-              <p class="hint" v-else>슬롯을 클릭 또는 드래그하여 선택하세요</p>
+            <div class="actions">
+              <button class="btn btn-ghost" :disabled="selectedTimes.length === 0 || isBusy" @click="clearSelectedTimes">
+                선택 초기화
+              </button>
+              <button class="btn btn-primary" :disabled="!canSubmitReservation || isBusy" @click="handleReservation">
+                {{ isSubmittingReservation ? '예약 중...' : '예약 확정' }}
+              </button>
             </div>
-
-            <button class="btn btn-primary" @click="handleReservation">예약 확정</button>
           </div>
         </div>
       </div>
@@ -176,7 +196,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, watchEffect, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import {
   generateTimeSlots,
   listReservationsByDate,
@@ -196,6 +216,11 @@ const today = new Date().toISOString().split('T')[0]
 const selectedDate = ref<string>(today)
 const isCardContentVisible = ref(false)
 const timeSlots = generateTimeSlots()
+const isRefreshingDay = ref(false)
+const isPrefetchingMonth = ref(false)
+const isSubmittingReservation = ref(false)
+const isSavingEdit = ref(false)
+const isDeletingReservation = ref(false)
 
 const reservations = ref<ReservationSlot[]>([])
 const reservationForm = ref<{
@@ -264,6 +289,7 @@ const effectiveSelectedHas = (time: string): boolean => {
 const isSelected = (time: string) => effectiveSelectedHas(time)
 
 const onSlotMouseDown = (time: string, e?: MouseEvent) => {
+  if (isBusy.value || isRefreshingDay.value) return
   e?.preventDefault()
   e?.stopPropagation()
   isDragging.value = true
@@ -310,13 +336,32 @@ const onSlotMouseLeave = (_time: string) => {
 const selectedTimes = computed(() =>
   Array.from(selectedSet.value).sort((a, b) => toIndex(a) - toIndex(b)),
 )
+const canSubmitReservation = computed(
+  () => reservationForm.value.name.trim().length > 0 && selectedTimes.value.length > 0,
+)
+const isBusy = computed(
+  () =>
+    isSubmittingReservation.value ||
+    isSavingEdit.value ||
+    isDeletingReservation.value ||
+    isRefreshingDay.value,
+)
+const clearSelectedTimes = () => {
+  selectedSet.value = new Set()
+}
 
 const handleReservation = async () => {
-  if (!reservationForm.value.name || selectedTimes.value.length === 0) {
-    alert('이름과 시간을 선택해주세요.')
+  if (!reservationForm.value.name.trim()) {
+    showToast('예약자 이름을 입력해주세요.')
     return
   }
+  if (selectedTimes.value.length === 0) {
+    showToast('예약할 시간을 선택해주세요.')
+    return
+  }
+  if (isSubmittingReservation.value) return
 
+  isSubmittingReservation.value = true
   try {
     const title =
       reservationForm.value.debateId === '__custom__'
@@ -324,13 +369,13 @@ const handleReservation = async () => {
         : null
     await createReservations(
       selectedDate.value,
-      reservationForm.value.name,
+      reservationForm.value.name.trim(),
       selectedTimes.value,
       title,
     )
     await refreshReservations()
     await prefetchMonthReservations()
-    alert('예약이 완료되었습니다.')
+    showToast('예약이 완료되었습니다.')
     reservationForm.value = {
       name: isLoggedIn.value ? userName.value : '',
       selectedSlots: [],
@@ -340,19 +385,31 @@ const handleReservation = async () => {
     selectedSet.value = new Set()
     // 월간 캐시는 prefetchMonthReservations에서 재구성됨
   } catch (e: any) {
-    alert(e?.message || '예약 중 오류가 발생했습니다.')
+    showToast(e?.message || '예약 중 오류가 발생했습니다.')
+  } finally {
+    isSubmittingReservation.value = false
   }
 }
 
 const refreshReservations = async () => {
-  reservations.value = await listReservationsByDate(selectedDate.value)
-  // 날짜 변경 시 선택 초기화
-  selectedSet.value = new Set()
+  isRefreshingDay.value = true
+  try {
+    reservations.value = await listReservationsByDate(selectedDate.value)
+    // 날짜 변경 시 선택 초기화
+    selectedSet.value = new Set()
+  } finally {
+    isRefreshingDay.value = false
+  }
 }
 
 // 초기 로드 및 날짜 변경 시 업데이트
-refreshReservations()
-watchEffect(refreshReservations)
+watch(
+  selectedDate,
+  () => {
+    void refreshReservations()
+  },
+  { immediate: true },
+)
 
 // -----------------
 // Timeline computed
@@ -411,13 +468,22 @@ const submitUpdate = async () => {
     showEditModal.value = false
     return
   }
-  await updateReservation(clickedEvent.value.id, {
-    reserved_by_name: editForm.value.name,
-    title: editForm.value.title ?? null,
-  })
-  await refreshReservations()
-  await prefetchMonthReservations()
-  showEditModal.value = false
+  if (isSavingEdit.value) return
+  isSavingEdit.value = true
+  try {
+    await updateReservation(clickedEvent.value.id, {
+      reserved_by_name: editForm.value.name,
+      title: editForm.value.title ?? null,
+    })
+    await refreshReservations()
+    await prefetchMonthReservations()
+    showToast('예약이 수정되었습니다.')
+    showEditModal.value = false
+  } catch (e: any) {
+    showToast(e?.message || '예약 수정 중 오류가 발생했습니다.')
+  } finally {
+    isSavingEdit.value = false
+  }
 }
 
 // -----------------
@@ -439,10 +505,19 @@ const submitDelete = async () => {
     showEditModal.value = false
     return
   }
-  await deleteReservation(clickedEvent.value.id)
-  await refreshReservations()
-  await prefetchMonthReservations()
-  showEditModal.value = false
+  if (isDeletingReservation.value) return
+  isDeletingReservation.value = true
+  try {
+    await deleteReservation(clickedEvent.value.id)
+    await refreshReservations()
+    await prefetchMonthReservations()
+    showToast('예약이 삭제되었습니다.')
+    showEditModal.value = false
+  } catch (e: any) {
+    showToast(e?.message || '예약 삭제 중 오류가 발생했습니다.')
+  } finally {
+    isDeletingReservation.value = false
+  }
 }
 
 const dragPreview = computed<RangeBlock | null>(() => {
@@ -501,57 +576,66 @@ const getReservationsForDate = (date: Date): { name: string; startTime: string }
 }
 
 const prefetchMonthReservations = async () => {
-  // 기준일: 달력 그리드의 중앙일 또는 1일. 간단히 현재 년/월의 15일을 사용
-  const y = currentYear.value
-  const m = currentMonth.value + 1
-  const centerYmd = `${y}-${String(m).padStart(2, '0')}-15`
+  isPrefetchingMonth.value = true
+  try {
+    // 기준일: 달력 그리드의 중앙일 또는 1일. 간단히 현재 년/월의 15일을 사용
+    const y = currentYear.value
+    const m = currentMonth.value + 1
+    const centerYmd = `${y}-${String(m).padStart(2, '0')}-15`
 
-  // 월 범위 일괄 조회 (이전/현재/다음달 포함)
-  const byDate = await listReservationsAroundMonth(centerYmd)
+    // 월 범위 일괄 조회 (이전/현재/다음달 포함)
+    const byDate = await listReservationsAroundMonth(centerYmd)
 
-  // 캐시와 달력 뷰 모델을 완전히 재구성 (이전 캐시와의 병합 제거)
-  const nextReserved = new Set<string>()
-  const eventsMap = new Map<string, { name: string; startTime: string }[]>()
-  const nextMonthCache = new Map<string, ReservationSlot[]>()
+    // 캐시와 달력 뷰 모델을 완전히 재구성 (이전 캐시와의 병합 제거)
+    const nextReserved = new Set<string>()
+    const eventsMap = new Map<string, { name: string; startTime: string }[]>()
+    const nextMonthCache = new Map<string, ReservationSlot[]>()
 
-  // 날짜별 슬롯을 저장하고, 월 캐시(YYYY-MM)에도 병합 저장
-  for (const [ymd, slots] of Object.entries(byDate)) {
-    if (slots.length > 0) nextReserved.add(ymd)
-    // day view용 이벤트 리스트 (시작 시간 라벨만 필요)
-    type Earliest = { startTime: string; name: string }
-    const byKey = new Map<string, Earliest>()
-    for (const s of slots) {
-      const key = s.id ? `id:${s.id}` : `name:${s.name}|title:${s.title ?? ''}`
-      const cur = byKey.get(key)
-      if (!cur || s.timeSlot < cur.startTime) {
-        byKey.set(key, { startTime: s.timeSlot, name: s.name })
+    // 날짜별 슬롯을 저장하고, 월 캐시(YYYY-MM)에도 병합 저장
+    for (const [ymd, slots] of Object.entries(byDate)) {
+      if (slots.length > 0) nextReserved.add(ymd)
+      // day view용 이벤트 리스트 (시작 시간 라벨만 필요)
+      type Earliest = { startTime: string; name: string }
+      const byKey = new Map<string, Earliest>()
+      for (const s of slots) {
+        const key = s.id ? `id:${s.id}` : `name:${s.name}|title:${s.title ?? ''}`
+        const cur = byKey.get(key)
+        if (!cur || s.timeSlot < cur.startTime) {
+          byKey.set(key, { startTime: s.timeSlot, name: s.name })
+        }
       }
+      const items = Array.from(byKey.values())
+        .map(({ name, startTime }) => ({ name, startTime }))
+        .sort((a, b) => (a.startTime < b.startTime ? -1 : a.startTime > b.startTime ? 1 : 0))
+      eventsMap.set(ymd, items)
+
+      const ym = ymd.slice(0, 7)
+      const prev = nextMonthCache.get(ym) ?? []
+      nextMonthCache.set(ym, [...prev, ...slots])
     }
-    const items = Array.from(byKey.values())
-      .map(({ name, startTime }) => ({ name, startTime }))
-      .sort((a, b) => (a.startTime < b.startTime ? -1 : a.startTime > b.startTime ? 1 : 0))
-    eventsMap.set(ymd, items)
 
-    const ym = ymd.slice(0, 7)
-    const prev = nextMonthCache.get(ym) ?? []
-    nextMonthCache.set(ym, [...prev, ...slots])
+    reservedDates.value = nextReserved
+    monthEventsByDate.value = eventsMap
+    monthCache.value = nextMonthCache
+  } catch (_e) {
+    showToast('월간 예약 정보를 불러오지 못했습니다.')
+  } finally {
+    isPrefetchingMonth.value = false
   }
-
-  reservedDates.value = nextReserved
-  monthEventsByDate.value = eventsMap
-  monthCache.value = nextMonthCache
 }
 
 watch(
   [currentYear, currentMonth],
   () => {
-    prefetchMonthReservations()
+    void prefetchMonthReservations()
   },
   { immediate: true },
 )
 
 const onSelectCalendarDate = (date: Date) => {
-  selectedDate.value = toYmd(date)
+  const nextDate = toYmd(date)
+  const sameDayClick = selectedDate.value === nextDate
+  selectedDate.value = nextDate
   isCardContentVisible.value = true
   // 상세 타임라인용 개별 날짜 데이터는 기존과 동일하게 당일만 호출
   // 캐시된 월 데이터가 있는 경우 reservations를 캐시에서 우선 채움
@@ -561,8 +645,10 @@ const onSelectCalendarDate = (date: Date) => {
   if (cached) {
     reservations.value = cached.filter((s) => s.date === day)
   }
-  // 최신화를 위해 당일 상세만 백엔드에 재요청 (UI 즉시반응 + 최신 동기화)
-  refreshReservations()
+  // 같은 날짜를 다시 눌렀을 때만 즉시 재조회 (날짜 변경은 watch가 처리)
+  if (sameDayClick) {
+    void refreshReservations()
+  }
 }
 
 // 중복 정의 제거됨
@@ -614,6 +700,10 @@ const onSelectCalendarDate = (date: Date) => {
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   box-shadow: 0 4px 16px rgba(74, 144, 226, 0.06);
+}
+.card-muted {
+  border-style: dashed;
+  background: #fbfdff;
 }
 .card-header {
   padding: 1rem 1rem 0.5rem;
@@ -668,15 +758,35 @@ const onSelectCalendarDate = (date: Date) => {
   padding: 0.5rem 0.75rem;
   border-radius: 8px;
   background: #f9fafb;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .section {
   margin-top: 0.25rem;
 }
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
 .section-title {
   font-weight: 600;
   margin-bottom: 0.75rem;
   color: #0f172a;
+}
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 0.625rem;
+  border-radius: 999px;
+  background: #e8f1ff;
+  color: #1d4ed8;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
 }
 .grid {
   display: grid;
@@ -833,6 +943,10 @@ const onSelectCalendarDate = (date: Date) => {
   font-size: 0.9rem;
   color: #0f172a;
 }
+.hint {
+  color: #64748b;
+  line-height: 1.5;
+}
 .select-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -868,11 +982,15 @@ const onSelectCalendarDate = (date: Date) => {
   cursor: pointer;
   font-weight: 600;
 }
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 .btn-primary {
   background: var(--primary-blue);
   color: white;
 }
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background: var(--secondary-blue);
 }
 .btn-ghost {
@@ -880,8 +998,70 @@ const onSelectCalendarDate = (date: Date) => {
   color: #334155;
   border-color: #e5e7eb;
 }
-.btn-ghost:hover {
+.btn-ghost:hover:not(:disabled) {
   background: #f8fafc;
+}
+.inline-form {
+  margin-top: 0.75rem;
+  display: flex;
+  justify-content: flex-end;
+}
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+@media (max-width: 640px) {
+  .container {
+    padding: 1rem 0.75rem;
+  }
+  .main {
+    padding-top: 1rem;
+    padding-bottom: 1.25rem;
+  }
+  .toolbar {
+    padding: 0.75rem;
+    gap: 0.625rem;
+    align-items: stretch;
+  }
+  .field {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+  .input {
+    font-size: 16px; /* iOS 입력 확대 방지 */
+  }
+  .section-head {
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .status-chip {
+    height: 22px;
+    font-size: 0.72rem;
+  }
+  .dialog-content {
+    padding: 0.875rem;
+  }
+  .inline-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+  }
+  .actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .actions .btn {
+    flex: 1 1 0;
+    min-height: 42px;
+  }
+  .event-abs {
+    height: 16px;
+  }
+  .event-abs .event-label {
+    margin-left: 4px;
+    font-size: 11px;
+  }
 }
 
 /* Timeline */
@@ -893,9 +1073,15 @@ const onSelectCalendarDate = (date: Date) => {
   background: #ffffff;
   user-select: none;
 }
+.timeline-container.is-loading {
+  opacity: 0.74;
+}
 @media (max-width: 450px) {
   .timeline-container {
-    --slot-width: 28px; /* 모바일에서 한 화면에 더 많은 시간 표시 */
+    --slot-width: 30px; /* 터치성과 가시성 균형 */
+  }
+  .time-label {
+    font-size: 0.68rem;
   }
 }
 
@@ -937,6 +1123,9 @@ const onSelectCalendarDate = (date: Date) => {
 .time-cell:hover {
   background: #f1f5f9;
 }
+.time-cell.has-event {
+  background: #f3f7ff;
+}
 .time-cell.is-selected {
   background: #eef6ff; /* 옅은 선택 배경 (라벨은 오버레이 상단 유지) */
   z-index: 1;
@@ -953,10 +1142,6 @@ const onSelectCalendarDate = (date: Date) => {
   bottom: 0;
   width: 2px;
   background: #cbd5e1;
-}
-.time-cell.is-reserved {
-  background: #fff1f3;
-  cursor: not-allowed;
 }
 
 /* 오버레이 레이어 (절대 위치) */

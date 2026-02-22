@@ -3,29 +3,68 @@
     <div class="login-container">
       <div class="login-header">
         <h2>로그인 / 회원가입</h2>
-        <p>만장토론 클럽은 네이버 계정으로 로그인합니다</p>
       </div>
 
-      <div v-if="!isOnboarding" class="social-section">
-        <a class="naver-login-cta" :href="API_BASE + '/naver'" aria-label="네이버로 로그인">
-          <img src="@/assets/btnG_완성형.png" alt="Naver Login" />
-        </a>
-        <p class="help-text">버튼을 클릭하면 네이버 로그인 페이지로 이동합니다.</p>
+      <div class="mode-switch">
+        <button
+          type="button"
+          class="mode-btn"
+          :class="{ active: mode === 'signin' }"
+          @click="changeMode('signin')"
+        >
+          로그인
+        </button>
+        <button
+          type="button"
+          class="mode-btn"
+          :class="{ active: mode === 'signup' }"
+          @click="changeMode('signup')"
+        >
+          회원가입
+        </button>
       </div>
 
-      <div v-else class="onboarding">
-        <h3>추가 정보 입력</h3>
-        <p class="help-text">처음 오신 것 같아요. sID를 입력해 가입을 완료해주세요.</p>
-        <form @submit.prevent="submitSID" class="onboarding-form">
-          <div class="form-group">
-            <label for="sid">sID</label>
-            <input id="sid" v-model="sid" placeholder="예: s123456" required />
-          </div>
-          <button class="submit-btn" type="submit" :disabled="submitting">
-            {{ submitting ? '처리 중...' : '가입 완료' }}
-          </button>
-        </form>
-      </div>
+      <form @submit.prevent="submitAuth" class="auth-form">
+        <div v-if="mode === 'signup'" class="form-group">
+          <label for="name">이름 (선택)</label>
+          <input id="name" v-model="name" autocomplete="name" placeholder="예: 홍길동" />
+        </div>
+
+        <div class="form-group">
+          <label for="email">이메일</label>
+          <input
+            id="email"
+            v-model="email"
+            type="email"
+            autocomplete="email"
+            placeholder="name@example.com"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="password">비밀번호</label>
+          <input
+            id="password"
+            v-model="password"
+            type="password"
+            autocomplete="current-password"
+            placeholder="6자 이상 입력"
+            minlength="6"
+            required
+          />
+        </div>
+
+        <button class="submit-btn" type="submit" :disabled="submitting">
+          {{ submitting ? '처리 중...' : submitButtonText }}
+        </button>
+      </form>
+
+      <p v-if="noticeMessage" class="notice-text">{{ noticeMessage }}</p>
+      <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
+      <p class="help-text">
+        회원가입 시 인증 메일이 발송되며, 메일 인증 완료 후 로그인할 수 있습니다.
+      </p>
 
       <div class="back-home">
         <router-link to="/home" class="back-btn">홈으로 돌아가기</router-link>
@@ -35,47 +74,81 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { signInWithEmail, signUpWithEmail, useAuth } from '@/lib/auth'
 
 const router = useRouter()
-const route = useRoute()
-const isOnboarding = ref(false)
+const { isLoggedIn } = useAuth()
+const mode = ref<'signin' | 'signup'>('signin')
 const name = ref('')
 const email = ref('')
-const sid = ref('')
+const password = ref('')
 const submitting = ref(false)
-const API_BASE = import.meta.env.VITE_API_BASE
+const noticeMessage = ref('')
+const errorMessage = ref('')
+
+const submitButtonText = computed(() => (mode.value === 'signin' ? '로그인' : '회원가입'))
 
 onMounted(() => {
-  const onboarding = route.query.onboarding === '1'
-  const qName = typeof route.query.name === 'string' ? route.query.name : ''
-  const qEmail = typeof route.query.email === 'string' ? route.query.email : ''
-  if (onboarding && qEmail) {
-    isOnboarding.value = true
-    name.value = qName
-    email.value = qEmail
+  if (isLoggedIn.value) {
+    router.replace('/home')
   }
 })
 
-async function submitSID() {
-  if (!sid.value || !email.value) return
+function changeMode(nextMode: 'signin' | 'signup') {
+  mode.value = nextMode
+  noticeMessage.value = ''
+  errorMessage.value = ''
+}
+
+function toFriendlyError(message: string): string {
+  if (!message) return '인증 처리 중 오류가 발생했습니다.'
+  if (/invalid login credentials/i.test(message)) {
+    return '이메일 또는 비밀번호가 올바르지 않습니다.'
+  }
+  if (/email not confirmed/i.test(message)) {
+    return '이메일 인증 완료 후 로그인해주세요.'
+  }
+  if (/user already registered/i.test(message)) {
+    return '이미 가입된 이메일입니다. 로그인으로 진행해주세요.'
+  }
+  if (/password should be at least/i.test(message)) {
+    return '비밀번호는 최소 6자 이상이어야 합니다.'
+  }
+  return message
+}
+
+async function submitAuth() {
+  noticeMessage.value = ''
+  errorMessage.value = ''
+  if (!email.value.trim() || !password.value) {
+    errorMessage.value = '이메일과 비밀번호를 입력해주세요.'
+    return
+  }
+
   submitting.value = true
   try {
-    const res = await fetch(import.meta.env.VITE_API_URL+'/naver/complete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.value, name: name.value, sid: sid.value })
-    })
-    const data = await res.json()
-    if (data?.redirect) {
-      window.location.href = data.redirect
+    if (mode.value === 'signup') {
+      const needsVerification = await signUpWithEmail(
+        email.value.trim(),
+        password.value,
+        name.value.trim(),
+      )
+      if (needsVerification) {
+        noticeMessage.value = '회원가입 완료: 인증 메일을 확인한 뒤 로그인해주세요.'
+        mode.value = 'signin'
+        password.value = ''
+      } else {
+        router.push('/home')
+      }
       return
     }
-    // 실패 시 기본 홈 이동
+
+    await signInWithEmail(email.value.trim(), password.value)
     router.push('/home')
-  } catch (e) {
-    alert('가입 처리 중 오류가 발생했습니다.')
+  } catch (error: any) {
+    errorMessage.value = toFriendlyError(error?.message ?? '')
   } finally {
     submitting.value = false
   }
@@ -117,16 +190,34 @@ async function submitSID() {
   margin: 0;
 }
 
-.social-section {
+.mode-switch {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   margin-bottom: 2rem;
 }
 
+.mode-btn {
+  flex: 1;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #4b5563;
+  border-radius: 8px;
+  padding: 0.65rem 0.75rem;
+  cursor: pointer;
+}
+
+.mode-btn.active {
+  background: var(--primary-blue);
+  border-color: var(--primary-blue);
+  color: #fff;
+}
+
+.auth-form {
+  margin-bottom: 1rem;
+}
+
 .form-group {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .form-group label {
@@ -150,43 +241,38 @@ async function submitSID() {
   border-color: var(--primary-blue);
 }
 
-.naver-login-cta img {
-  display: block;
+.submit-btn {
   width: 100%;
-  max-width: 360px;
-  height: auto;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  background: var(--primary-blue);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.submit-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .help-text {
   color: #666;
   font-size: 0.9rem;
-  margin: 0;
+  margin: 0 0 1rem;
 }
 
-.onboarding h3 {
-  color: var(--primary-blue);
-  margin-top: 0;
+.notice-text {
+  color: #0f766e;
+  font-size: 0.9rem;
+  margin: 0 0 0.5rem;
 }
 
-.onboarding-form {
-  margin-top: 1rem;
-}
-
-/* 폼/토글 UI 제거됨 */
-
-.switch-mode p {
-  color: #666;
-  margin: 0;
-}
-
-.switch-btn {
-  background: none;
-  border: none;
-  color: var(--primary-blue);
-  cursor: pointer;
-  font-weight: 500;
-  text-decoration: underline;
-  margin-left: 0.5rem;
+.error-text {
+  color: #b91c1c;
+  font-size: 0.9rem;
+  margin: 0 0 0.5rem;
 }
 
 .back-home {

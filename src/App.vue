@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuth } from './lib/auth'
+import { signOutAuth, useAuth } from './lib/auth'
 const router = useRouter()
-const { isLoggedIn, userName, clearUser } = useAuth()
+const { isLoggedIn, userName } = useAuth()
 
 const menuOpen = ref(false)
 
@@ -13,10 +13,14 @@ function displayName(name: string): string {
   return name.length > 12 ? name.slice(0, 12) + '…' : name
 }
 
-function onLogout() {
-  clearUser()
-  menuOpen.value = false
-  router.push('/home')
+async function onLogout() {
+  try {
+    await signOutAuth()
+    menuOpen.value = false
+    router.push('/home')
+  } catch (_error) {
+    alert('로그아웃 중 오류가 발생했습니다.')
+  }
 }
 
 function goToTimerReset() {

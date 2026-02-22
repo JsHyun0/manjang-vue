@@ -284,9 +284,23 @@ const truncateName = (name: string): string => {
 }
 
 .day.past {
-  color: #c7c7c7;
-  cursor: not-allowed;
-  background: #fafbfc;
+  color: #94a3b8;
+  cursor: default;
+  background: linear-gradient(180deg, #fbfdff 0%, #f8fafc 100%);
+  border-color: #edf2f8;
+}
+
+.day.past .day-number {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.day.past .event-item {
+  color: #8fa1b6;
+}
+
+.day.past .event-time {
+  color: #8fa1b6;
 }
 
 /* 날짜 숫자: 우측 상단 고정 */
@@ -393,24 +407,27 @@ const truncateName = (name: string): string => {
     font-size: 0.95rem;
   }
   .day {
-    height: 85px;
+    height: 84px;
   }
   .events {
-    margin-top: 16px;
+    margin-top: 15px;
+    gap: 2px;
   }
   .event-item {
-    font-size: 0.55rem;
-    flex-direction: column; /* 모바일에서 두 줄(시간/이름) */
-    align-items: flex-start;
+    font-size: 0.58rem;
+    line-height: 0.85rem;
+    flex-direction: row;
+    align-items: center;
+    gap: 3px;
   }
   .event-time {
     min-width: auto;
-    font-size: 0.6rem;
-    line-height: 0.85rem;
+    font-size: 0.58rem;
+    line-height: 0.8rem;
   }
   .event-name {
-    font-size: 0.6rem;
-    line-height: 0.9rem;
+    font-size: 0.58rem;
+    line-height: 0.85rem;
   }
 }
 
@@ -420,7 +437,7 @@ const truncateName = (name: string): string => {
     font-size: 0.75rem;
   }
   .day {
-    height: 88px;
+    height: 84px;
   }
   .day-number {
     font-size: 0.8rem;

@@ -1,50 +1,92 @@
-import { ref, computed } from 'vue'
+import { computed, ref } from 'vue'
+import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js'
+import { supabase } from './supabaseClient'
 
 type AuthUser = {
+  id: string
   name: string
   email: string
 }
 
-const STORAGE_KEY = 'manjang_auth_user'
-
 const userRef = ref<AuthUser | null>(null)
+const readyRef = ref(false)
+let initPromise: Promise<void> | null = null
 
-function loadFromStorage() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      userRef.value = JSON.parse(raw)
+const toDisplayName = (user: User): string => {
+  const rawMetaName = user.user_metadata?.name
+  if (typeof rawMetaName === 'string' && rawMetaName.trim()) {
+    return rawMetaName.trim()
+  }
+  const email = user.email ?? ''
+  const localPart = email.split('@')[0] ?? ''
+  return localPart || '사용자'
+}
+
+const mapUser = (user: User | null): AuthUser | null => {
+  if (!user || !user.email) return null
+  return {
+    id: user.id,
+    name: toDisplayName(user),
+    email: user.email,
+  }
+}
+
+export async function initAuth(): Promise<void> {
+  if (initPromise) return initPromise
+  initPromise = (async () => {
+    const { data, error } = await supabase.auth.getUser()
+    if (error) {
+      userRef.value = null
+    } else {
+      userRef.value = mapUser(data.user ?? null)
     }
-  } catch (_) {
-    // ignore
-  }
+    readyRef.value = true
+  })()
+  return initPromise
 }
 
-function saveToStorage(user: AuthUser | null) {
-  if (!user) {
-    localStorage.removeItem(STORAGE_KEY)
-    return
+supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
+  userRef.value = mapUser(session?.user ?? null)
+  readyRef.value = true
+})
+
+export async function signUpWithEmail(email: string, password: string, name: string): Promise<boolean> {
+  const options: { emailRedirectTo: string; data?: { name: string } } = {
+    emailRedirectTo: `${window.location.origin}/login`,
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(user))
+  if (name.trim()) {
+    options.data = { name: name.trim() }
+  }
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options,
+  })
+  if (error) throw error
+  userRef.value = mapUser(data.user ?? null)
+  return !data.session
 }
 
-loadFromStorage()
+export async function signInWithEmail(email: string, password: string): Promise<void> {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  })
+  if (error) throw error
+  userRef.value = mapUser(data.user ?? null)
+}
+
+export async function signOutAuth(): Promise<void> {
+  const { error } = await supabase.auth.signOut()
+  if (error) throw error
+  userRef.value = null
+}
 
 export function useAuth() {
   const isLoggedIn = computed(() => !!userRef.value)
   const userName = computed(() => userRef.value?.name ?? '')
+  const userEmail = computed(() => userRef.value?.email ?? '')
+  const isAuthReady = computed(() => readyRef.value)
 
-  function setUser(user: AuthUser) {
-    userRef.value = user
-    saveToStorage(user)
-  }
-
-  function clearUser() {
-    userRef.value = null
-    saveToStorage(null)
-  }
-
-  return { user: userRef, isLoggedIn, userName, setUser, clearUser }
+  return { user: userRef, isLoggedIn, userName, userEmail, isAuthReady }
 }
-
-
