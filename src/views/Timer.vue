@@ -3,23 +3,55 @@
     <div class="timer-container">
       <!-- 모드 선택 화면 -->
       <div v-if="stage === 'select'" class="mode-select">
-        <h2 class="select-title">타이머를 선택하세요</h2>
+        <div class="stage-title-wrap">
+          <p class="stage-kicker">Timer Studio</p>
+          <h2 class="select-title">타이머를 선택하세요</h2>
+          <p class="select-subtitle">
+            16:9 화면 발표 환경에 최적화된 토론 타이머입니다.
+            <br />
+            토론 유형을 선택하면 단계별 시간을 세부 조정할 수 있습니다.
+          </p>
+        </div>
         <div class="mode-card-grid">
           <button class="mode-card free" @click="handleSelectMode('free')">
-            <div class="mode-card-title">자유토론</div>
-            <div class="mode-card-desc">10분 기본 타이머</div>
+            <div class="mode-card-head">
+              <div class="mode-card-title">자유토론</div>
+              <span class="mode-chip">CEDA</span>
+            </div>
+            <div class="mode-card-desc">주요 발언 후 자유 토론 단계에서 듀얼 타이머를 사용합니다.</div>
+            <ul class="mode-features">
+              <li>단계별 시간 커스텀</li>
+              <li>자유토론 듀얼 전환</li>
+              <li>대회형 진행에 적합</li>
+            </ul>
           </button>
           <button class="mode-card ssu" @click="handleSelectMode('ssu')">
-            <div class="mode-card-title">SSU토론</div>
-            <div class="mode-card-desc">10단계 진행형 타이머</div>
+            <div class="mode-card-head">
+              <div class="mode-card-title">SSU토론</div>
+              <span class="mode-chip">SSU</span>
+            </div>
+            <div class="mode-card-desc">10단계 진행형 구조와 발언자/작전타임 카운터를 제공합니다.</div>
+            <ul class="mode-features">
+              <li>발언자 하이라이트</li>
+              <li>보충질의/작전타임</li>
+              <li>대규모 발표에 최적화</li>
+            </ul>
           </button>
         </div>
       </div>
 
       <!-- 준비(설정) 화면 -->
       <div v-else-if="stage === 'prepare'" class="prepare-container">
-        <h2 class="select-title">준비 단계 - 시간 설정</h2>
-        <p class="prepare-desc">각 단계의 시간을 분/초 단위로 조정하세요.</p>
+        <div class="prepare-header">
+          <div>
+            <h2 class="select-title">준비 단계 - 시간 설정</h2>
+            <p class="prepare-desc">각 단계의 시간을 분/초 단위로 조정한 뒤 시작하세요.</p>
+          </div>
+          <div class="prepare-meta">
+            <span class="prepare-chip">{{ selectedMode === 'free' ? '자유토론' : 'SSU토론' }}</span>
+            <span class="prepare-chip">{{ preparePhases.length }}개 단계</span>
+          </div>
+        </div>
 
         <div class="topic-input">
           <label for="debate-topic" class="topic-label">논제</label>
@@ -725,712 +757,577 @@ watch(
 
 <style scoped>
 .timer-page {
+  --timer-bg-1: #f5f9ff;
+  --timer-bg-2: #edf3ff;
+  --timer-surface: #ffffff;
+  --timer-surface-muted: #f7faff;
+  --timer-border: #d9e6fb;
+  --timer-border-strong: #b5cdef;
+  --timer-text: #0f2947;
+  --timer-subtext: #466387;
+  --timer-accent: #1f5fa7;
+  --timer-accent-2: #0e8577;
+  --timer-danger: #d14343;
+}
+
+.timer-page {
   min-height: 100vh;
-  background: white;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(67, 123, 201, 0.17), transparent 34%),
+    radial-gradient(circle at 100% 100%, rgba(40, 142, 127, 0.12), transparent 30%),
+    linear-gradient(155deg, var(--timer-bg-1), var(--timer-bg-2));
   display: flex;
   align-items: stretch;
   justify-content: center;
   overflow-x: hidden;
-  overflow-y: auto;
 }
 
 .timer-container {
   width: 100%;
-  max-width: 100vw;
-  padding: 0.5rem 1rem;
+  max-width: 1920px;
+  padding: 0.9rem 1.1rem 0;
   display: grid;
-  grid-template-rows: auto 1fr auto; /* 상단바 / 메인 / 하단바 */
+  grid-template-rows: auto 1fr auto;
   min-height: 100vh;
 }
 
-/* 상단 단계 바 */
-.step-topbar {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  background: white;
-  border-bottom: 1px solid #e5e7eb;
-  /* 컨테이너 폭 제약을 벗어나 전체 화면 폭으로 노출 */
-  width: 100vw;
-  margin-left: calc(50% - 50vw);
-  margin-right: calc(50% - 50vw);
-  padding: 0.6rem 1rem;
-  display: flex;
-  justify-content: center;
+.stage-title-wrap {
+  text-align: center;
+  margin-bottom: 0.4rem;
 }
 
-/* 모드 선택 스타일 */
-.mode-select {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1.5rem;
-  padding-top: 4rem;
+.stage-kicker {
+  margin: 0 0 0.45rem;
+  color: #4573a6;
+  letter-spacing: 0.08em;
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
 .select-title {
-  font-size: 1.6rem;
-  font-weight: 700;
-  color: #1f2937;
+  margin: 0;
+  color: var(--timer-text);
+  font-size: clamp(1.7rem, 2.2vw, 2.3rem);
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.select-subtitle {
+  margin: 0.8rem 0 0;
+  color: var(--timer-subtext);
+  line-height: 1.58;
+  font-size: clamp(0.96rem, 1.1vw, 1.13rem);
+}
+
+.mode-select {
+  max-width: 1240px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.15rem;
+  padding-top: min(8vh, 5.2rem);
 }
 
 .mode-card-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(220px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  gap: clamp(0.8rem, 2vw, 1.3rem);
 }
 
 .mode-card {
-  border: 2px solid #e5e7eb;
-  background: white;
-  border-radius: 16px;
-  padding: 1.2rem 1.4rem;
+  border: 1px solid var(--timer-border);
+  background: linear-gradient(150deg, #fff, #f8fbff);
+  border-radius: 20px;
+  padding: 1.25rem 1.25rem 1.1rem;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease;
   text-align: left;
+  box-shadow: 0 10px 26px rgba(25, 86, 160, 0.08);
+}
+
+.mode-card.free {
+  border-top: 4px solid #2f6eb6;
+}
+
+.mode-card.ssu {
+  border-top: 4px solid #19897f;
 }
 
 .mode-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-  border-color: var(--primary-blue);
+  transform: translateY(-2px);
+  box-shadow: 0 16px 34px rgba(22, 76, 139, 0.16);
+  border-color: var(--timer-border-strong);
+}
+
+.mode-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
 }
 
 .mode-card-title {
-  font-size: 1.2rem;
+  font-size: clamp(1.2rem, 1.5vw, 1.45rem);
+  font-weight: 900;
+  color: #0f2a4a;
+}
+
+.mode-chip {
+  height: 24px;
+  border-radius: 999px;
+  padding: 0 0.55rem;
+  background: #e8f1ff;
+  color: #2a5f9d;
+  font-size: 0.74rem;
   font-weight: 800;
-  color: #111827;
-  margin-bottom: 0.25rem;
+  border: 1px solid #bfd5f1;
+  display: inline-flex;
+  align-items: center;
+}
+
+.mode-card.ssu .mode-chip {
+  background: #e9f8f4;
+  color: #18645b;
+  border-color: #bde3d9;
 }
 
 .mode-card-desc {
-  color: #6b7280;
-  font-size: 0.95rem;
+  margin-top: 0.55rem;
+  color: #4d6786;
+  font-size: 0.97rem;
+  line-height: 1.5;
 }
 
-/* 준비 화면 */
+.mode-features {
+  margin: 0.8rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.38rem;
+}
+
+.mode-features li {
+  color: #446482;
+  font-size: 0.89rem;
+  line-height: 1.35;
+}
+
+.mode-features li::before {
+  content: '•';
+  margin-right: 0.45rem;
+  color: #2e71bd;
+}
+
 .prepare-container {
-  max-width: 960px;
+  width: min(1560px, 100%);
   margin: 0 auto;
+  background: linear-gradient(145deg, #ffffff, #f7fbff);
+  border: 1px solid var(--timer-border);
+  border-radius: 20px;
+  box-shadow: 0 14px 34px rgba(23, 90, 161, 0.1);
+  padding: clamp(1rem, 2.5vw, 1.6rem);
+}
+
+.prepare-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.9rem;
+}
+
+.prepare-desc {
+  margin: 0.55rem 0 0;
+  color: #4a6686;
+  font-size: 1rem;
+}
+
+.prepare-meta {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.prepare-chip {
+  height: 30px;
+  border-radius: 999px;
+  padding: 0 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  background: #e8f2ff;
+  border: 1px solid #bfd5f1;
+  color: #2b619f;
+  font-size: 0.83rem;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .topic-input {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  margin: 1rem 0 1.2rem;
+  margin: 1rem 0 0.4rem;
+  display: grid;
+  gap: 0.42rem;
 }
 
 .topic-label {
-  font-weight: 700;
-  color: #374151;
+  color: #31547c;
+  font-weight: 800;
+  font-size: 0.88rem;
 }
 
 .topic-text-input {
-  padding: 0.6rem 0.8rem;
-  border: 2px solid #e5e7eb;
-  border-radius: 10px;
-  font-size: 0.95rem;
+  height: 48px;
+  padding: 0 0.8rem;
+  border: 1px solid #cadcf4;
+  border-radius: 12px;
+  background: #fafdff;
+  font-size: 1rem;
 }
 
 .topic-text-input:focus {
   outline: none;
-  border-color: var(--primary-blue);
-  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.15);
+  border-color: #74a3da;
+  box-shadow: 0 0 0 3px rgba(79, 140, 211, 0.18);
 }
 
-.prepare-desc {
-  color: #6b7280;
-  margin-top: -0.25rem;
-  margin-bottom: 1.25rem;
-}
-
-/* 토론자 입력 옵션 */
 .debater-input-option {
-  margin: 3rem 0 1.2rem;
-  padding: 1rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  background: #ffffff;
-  display: inline-block;
-  width: max-content;
-  max-width: 100%;
-  overflow-x: auto;
+  margin-top: 1rem;
+  border: 1px solid #d2e3f7;
+  border-radius: 14px;
+  background: #f8fbff;
+  padding: 0.95rem;
 }
 
 .debater-input-checkbox {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  font-weight: 700;
-  color: #374151;
+  gap: 0.45rem;
+  font-weight: 800;
+  color: #335b84;
 }
 
 .debater-inputs {
-  margin-top: 0.8rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
-  width: max-content;
-}
-
-.debater-side {
-  width: max-content;
+  margin-top: 0.9rem;
+  display: grid;
+  gap: 0.85rem;
 }
 
 .debater-side h4 {
-  margin: 0 0 0.5rem 0;
-  color: var(--primary-blue);
+  margin: 0 0 0.45rem;
+  color: #2d5e9a;
+  font-size: 0.94rem;
 }
 
 .debater-input-row {
-  display: flex;
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;
 }
 
 .debater-name-input {
-  padding: 0.5rem 0.6rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  width: 150px;
+  height: 40px;
+  border: 1px solid #cadcf4;
+  border-radius: 10px;
+  padding: 0 0.65rem;
+  font-size: 0.9rem;
 }
 
 .prepare-actions {
-  margin-top: 1.5rem;
+  margin-top: 1rem;
   display: flex;
-  gap: 0.8rem;
   justify-content: flex-end;
+  gap: 0.55rem;
 }
 
 .prepare-actions .back {
-  background: #6b7280;
-  color: white;
+  background: #4f637b;
+  color: #fff;
 }
 
 .prepare-actions .start {
-  background: #28a745;
-  color: white;
+  background: linear-gradient(135deg, #1c8b67, #1f6f9f);
+  color: #fff;
 }
 
-/* 상단 헤더라인 */
-.top-header {
-  margin-bottom: 0.8rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid #e1e1e1;
-}
-
-/* 타이머 종류 선택 */
-.timer-type-selector {
+.step-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  padding: 0.62rem 1rem;
   display: flex;
-  justify-content: flex-start;
-  gap: 0.5rem;
+  justify-content: center;
+  backdrop-filter: blur(8px);
+  background: rgba(16, 39, 68, 0.84);
+  border-bottom: 1px solid rgba(180, 207, 242, 0.2);
 }
 
-.type-btn {
-  padding: 0.8rem 1.5rem;
-  border: 2px solid #e1e1e1;
-  background: white;
-  border-radius: 12px;
-  font-size: 1rem;
-  font-weight: 600;
+.step-buttons {
+  display: inline-grid;
+  gap: 0.35rem;
+  width: min(1780px, calc(100vw - 2rem));
+}
+
+.step-dot {
+  appearance: none;
+  border: 1px solid rgba(196, 216, 244, 0.36);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(235, 243, 255, 0.88);
+  border-radius: 11px;
+  font-weight: 700;
+  font-size: clamp(0.8rem, 1vw, 1rem);
+  padding: 0.44rem 0.3rem;
   cursor: pointer;
-  transition: all 0.3s ease;
-  min-width: 100px;
-  color: #333;
+  transition: all 0.16s ease;
 }
 
-.type-btn:hover {
-  border-color: var(--primary-blue);
-  transform: translateY(-2px);
-  box-shadow: 0 2px 8px rgba(74, 144, 226, 0.2);
+.step-dot:hover {
+  background: rgba(255, 255, 255, 0.18);
 }
 
-.type-btn.active {
-  background: var(--primary-blue);
-  color: white;
-  border-color: var(--primary-blue);
+.step-dot.active {
+  background: #f8fbff;
+  color: #0f3159;
+  border-color: #f8fbff;
 }
 
-/* 메인 타이머 영역 */
 .timer-main {
+  position: relative;
+  width: 100%;
+  padding: 2.4rem 0.45rem 1.2rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2rem 0 1rem; /* 상단 논제 공간 + 하단바 여백 확보 */
-  position: relative;
 }
 
 .timer-main.ssu-mode {
-  justify-content: space-between;
-  /* 좌/우 토론자 영역 고정폭 변수 (중앙 논제와 동기화) */
-  --debater-width: clamp(300px, 20vw, 380px);
-}
-
-/* 자유토론 듀얼 타이머 단계 전용 레이아웃 */
-.timer-main.free-dual {
-  flex-direction: column;
+  --debater-width: clamp(280px, 18.5vw, 370px);
+  display: grid;
+  grid-template-columns: var(--debater-width) minmax(620px, 1fr) var(--debater-width);
+  gap: clamp(0.7rem, 1.2vw, 1.4rem);
   align-items: stretch;
-  justify-content: flex-start;
-  padding: 1rem 0 4.5rem;
 }
 
-/* 자유토론 일반 단계도 column 레이아웃로 고정 */
 .timer-main:not(.ssu-mode) {
   flex-direction: column;
   align-items: stretch;
-  justify-content: center;
-  padding: 2rem 0 0.5rem;
 }
 
-/* 자유토론 듀얼 타이머 */
-.dual-timers {
-  display: flex;
+.timer-main.free-dual {
   align-items: stretch;
-  justify-content: space-between;
-  gap: 1.5rem;
-  width: 100%;
-  max-width: none;
-  height: calc(100vh - 180px); /* 상단바/논제/하단바 여백 제외 후 전체 높이 활용 */
+  justify-content: flex-start;
 }
 
-/* 듀얼 단계에서는 헤더 바가 별도로 공간을 차지하므로 고정 높이를 해제 */
-.timer-main.free-dual .dual-timers {
-  height: auto;
-  flex: 1 1 auto;
-  min-height: 0;
+.timer-main.ssu-mode .debate-topic-global {
+  left: calc(var(--debater-width) + 1rem);
+  right: calc(var(--debater-width) + 1rem);
 }
 
-/* free 일반 단계에서 원형 타이머 중앙 정렬 및 여백 */
-.timer-main:not(.ssu-mode) .timer-display {
-  margin: 0 auto;
-  padding-top: 0.5rem;
-  flex: 0 0 auto;
-}
-
-.rect-timer {
-  flex: 1 1 0;
-  min-width: 280px;
-  max-width: none;
-  background: #ffffff;
-  border: 2px solid #e5e7eb;
-  border-radius: 16px;
-  padding: 1.6rem 1.6rem 1.2rem;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    border-color 0.2s ease;
-}
-
-.rect-timer.positive {
-  border-color: var(--primary-blue);
-}
-
-.rect-timer.negative {
-  border-color: #ef4444;
-}
-
-/* 듀얼 타이머 활성 강조 효과 */
-.rect-timer.active {
-  transform: translateY(-2px) scale(1.01);
-  box-shadow:
-    0 16px 36px rgba(0, 0, 0, 0.12),
-    0 0 0 4px rgba(74, 144, 226, 0.08);
-}
-.rect-timer.positive.active {
-  border-color: var(--primary-blue);
-  box-shadow:
-    0 16px 36px rgba(74, 144, 226, 0.22),
-    0 0 0 4px rgba(74, 144, 226, 0.15);
-}
-.rect-timer.negative.active {
-  border-color: #ef4444;
-  box-shadow:
-    0 16px 36px rgba(239, 68, 68, 0.22),
-    0 0 0 4px rgba(239, 68, 68, 0.15);
-}
-
-@keyframes activePulse {
-  0% {
-    transform: translateY(-2px) scale(1.01);
-  }
-  50% {
-    transform: translateY(-1px) scale(1.02);
-  }
-  100% {
-    transform: translateY(-2px) scale(1.01);
-  }
-}
-.rect-timer.active .rect-title,
-.rect-timer.active .rect-time {
-  animation: activePulse 1.2s ease-in-out infinite;
-}
-
-.rect-title {
-  font-size: 1.2rem;
-  font-weight: 800;
-  color: #0b2239;
-  margin-bottom: 0.4rem;
-}
-
-.rect-time {
-  font-size: 4rem;
-  font-weight: 800;
-  color: #0b2239;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-  margin: 0.6rem 0;
-}
-
-.sub-timer {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  background: #f9fafb;
-  border: 1px dashed #e5e7eb;
-  color: #4b5563;
-  padding: 0.4rem 0.6rem;
-  border-radius: 8px;
-  margin-top: 1rem;
-  margin-bottom: 2rem;
-}
-
-.sub-timer.warning {
-  background: #fff7ed;
-  border-color: #fdba74;
-  color: #9a3412;
-}
-
-.sub-label {
-  font-size: 0.85rem;
-  font-weight: 700;
-}
-
-.sub-time {
-  font-weight: 500;
-  font-size: 2.5rem;
-}
-
-.rect-controls {
-  display: flex;
-  gap: 0.6rem;
-}
-
-/* 전역(가운데 상단) 논제 표시 */
 .debate-topic-global {
   position: absolute;
-  top: 4rem;
+  top: 0.35rem;
   left: 0;
   right: 0;
   text-align: center;
-  font-weight: 800;
-  color: #1f2937;
-  line-height: 1.25;
-  font-size: 2.4rem;
-  word-break: keep-all;
+  font-weight: 900;
+  color: #173b63;
+  line-height: 1.24;
+  font-size: clamp(1.6rem, 2.8vw, 2.95rem);
+  letter-spacing: -0.015em;
+  padding: 0 1rem;
   pointer-events: none;
 }
 
-/* 듀얼 단계 전용 논제 바 (레이아웃 분리용) */
 .debate-topic-bar {
+  margin: 0 auto 0.9rem;
+  width: min(980px, 100%);
   text-align: center;
-  font-weight: 800;
-  color: #1f2937;
-  line-height: 1.25;
-  font-size: 1.6rem;
-  word-break: keep-all;
-  padding: 0.75rem 0.75rem;
-  margin-bottom: 4rem;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
+  font-weight: 900;
+  color: #163b62;
+  font-size: clamp(1.2rem, 1.9vw, 2rem);
+  line-height: 1.3;
+  padding: 0.68rem 0.8rem;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--timer-border);
+  border-radius: 14px;
 }
 
-/* SSU 모드에서는 좌/우 아이콘 영역(220px) 사이만 차지 */
-.timer-main.ssu-mode .debate-topic-global {
-  left: var(--debater-width, 220px);
-  right: var(--debater-width, 220px);
-}
-
-/* 토론자 그룹 */
 .debaters-left,
 .debaters-right {
-  flex: 0 0 var(--debater-width, 220px);
-  max-width: var(--debater-width, 220px);
+  border: 1px solid var(--timer-border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 10px 22px rgba(27, 90, 161, 0.08);
+  padding: 0.8rem;
 }
 
 .debater-group h3 {
+  margin: 0 0 0.72rem;
   text-align: center;
-  color: var(--primary-blue);
-  margin-bottom: 1.2rem;
-  font-size: 1.6rem;
-  font-weight: 600;
+  color: #24588f;
+  font-size: clamp(1.05rem, 1.2vw, 1.45rem);
+  font-weight: 900;
 }
 
 .debater-icons {
-  display: flex;
-  flex-direction: column;
-  gap: 4rem;
-  align-items: center;
+  display: grid;
+  gap: 0.92rem;
+  justify-items: center;
 }
 
 .debater-icon {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.3rem;
-}
-
-.debater-icon.highlight .avatar {
-  outline: 4px solid #ffb703;
-  box-shadow:
-    0 0 0 8px rgba(255, 183, 3, 0.22),
-    0 8px 22px rgba(255, 183, 3, 0.4);
-}
-
-.debater-icon.highlight .debater-label {
-  color: #ff8f00;
-  font-weight: 800;
+  display: grid;
+  justify-items: center;
+  gap: 0.34rem;
 }
 
 .avatar {
-  width: 100px;
-  height: 100px;
+  width: clamp(70px, 5.6vw, 102px);
+  height: clamp(70px, 5.6vw, 102px);
   border-radius: 50%;
-  background: linear-gradient(135deg, #4a90e2, #357abd);
+  background: linear-gradient(135deg, #2f72b7, #1f5fa7);
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+  box-shadow: 0 8px 18px rgba(47, 114, 183, 0.28);
 }
 
 .avatar-icon {
-  width: 54px;
-  height: 54px;
+  width: 56%;
+  height: 56%;
   fill: rgba(255, 255, 255, 0.95);
   stroke: rgba(255, 255, 255, 0.95);
-  stroke-width: 1.5;
+  stroke-width: 1.4;
+}
+
+.debater-icon.highlight .avatar {
+  outline: 4px solid #f4b63e;
+  box-shadow:
+    0 0 0 8px rgba(244, 182, 62, 0.2),
+    0 10px 22px rgba(236, 163, 19, 0.36);
 }
 
 .debater-label {
-  font-size: 1.25rem;
-  color: #444;
-  font-weight: 700;
+  color: #274f7d;
+  font-size: clamp(0.95rem, 1vw, 1.2rem);
+  font-weight: 800;
 }
 
-/* 사용 횟수 표시 */
+.debater-icon.highlight .debater-label {
+  color: #cf7c00;
+}
+
 .usage-counters {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-top: 1rem;
+  margin-top: 0.82rem;
+  border: 1px solid #d6e5f8;
+  border-radius: 10px;
+  background: #f9fcff;
   padding: 0.5rem;
-  background: rgba(255, 255, 255, 0.8);
-  border-radius: 8px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
-  border: 1px solid #e9ecef;
-  user-select: none;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
+  display: grid;
+  gap: 0.46rem;
 }
 
 .counter-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.4rem;
+  border-radius: 8px;
+  padding: 0.34rem;
+  display: grid;
+  justify-items: center;
+  gap: 0.34rem;
   cursor: pointer;
-  padding: 0.4rem;
-  border-radius: 6px;
-  transition: all 0.3s ease;
-  user-select: none;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
 }
 
 .counter-item:hover {
-  background-color: rgba(74, 144, 226, 0.1);
-  transform: translateY(-1px);
+  background: rgba(52, 117, 190, 0.08);
 }
 
 .counter-item h4 {
-  font-size: 1rem;
-  color: var(--primary-blue);
   margin: 0;
-  font-weight: 600;
-  text-align: center;
-  user-select: none;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
+  color: #2b5c93;
+  font-size: 0.9rem;
+  font-weight: 800;
 }
 
 .counter-display {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  user-select: none;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
+  gap: 0.34rem;
 }
 
 .counter-dots {
   display: flex;
-  gap: 0.4rem;
-  user-select: none;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
+  gap: 0.32rem;
 }
 
 .dot {
-  width: 18px;
-  height: 18px;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
-  background-color: #ddd;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  border: 2px solid #ccc;
-  position: relative;
-  user-select: none;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-}
-
-.dot::before {
-  content: '';
-  position: absolute;
-  top: -6px;
-  left: -6px;
-  right: -6px;
-  bottom: -6px;
-  border-radius: 50%;
-  background: transparent;
-}
-
-.dot:hover {
-  transform: scale(1.2);
-  border-color: var(--primary-blue);
+  background: #d5e0ed;
+  border: 2px solid #c0d0e3;
 }
 
 .dot.active {
-  background-color: var(--primary-blue);
-  border-color: var(--primary-blue);
-  box-shadow: 0 0 6px rgba(74, 144, 226, 0.5);
+  background: #3a79bc;
+  border-color: #3a79bc;
 }
 
 .counter-text {
-  font-size: 0.9rem;
-  color: #555;
-  font-weight: 600;
-  background: #f8f9fa;
-  padding: 0.15rem 0.4rem;
-  border-radius: 4px;
-  user-select: none;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-}
-
-/* 보충질의 카운터 화살표 */
-.counter-arrows {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-left: 0.2rem;
-}
-.arrow-btn {
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #374151;
-  font-size: 0.7rem;
-  line-height: 1;
-  padding: 0.1rem 0.3rem;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.arrow-btn:hover {
-  background: rgba(74, 144, 226, 0.08);
-}
-.arrow-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* 타이머 디스플레이 */
-.timer-display {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  max-width: 520px;
-  margin-top: 1rem;
-}
-
-.step-buttons {
-  display: inline-grid;
-  justify-content: center;
-  gap: 0.4rem;
-  width: auto;
-  /* 상단바 확장에 맞춰 버튼 영역도 더 넓게 */
-  max-width: min(1800px, 100vw - 2rem);
-  margin: 0 auto;
-}
-
-.step-dot {
-  appearance: none;
-  border: 2px solid #e1e1e1;
-  background: white;
-  /* color: var(--primary-blue); */
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 1rem;
-  padding: 0.4rem 0;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.step-dot:hover {
-  background: rgba(74, 144, 226, 0.08);
-  transform: translateY(-1px);
-}
-
-.step-dot.active {
-  background: var(--primary-blue);
-  color: white;
+  border-radius: 6px;
+  padding: 0.12rem 0.33rem;
+  background: #edf4fb;
+  color: #355b84;
+  font-size: 0.79rem;
   font-weight: 800;
 }
 
+.counter-arrows {
+  display: grid;
+  gap: 2px;
+}
+
+.arrow-btn {
+  border: 1px solid #c6d8ef;
+  background: #fff;
+  color: #284f7b;
+  border-radius: 4px;
+  padding: 0.04rem 0.22rem;
+  cursor: pointer;
+  font-size: 0.66rem;
+}
+
+.timer-display {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 1.1rem;
+}
+
 .timer-circle {
-  width: clamp(360px, 28vw, 520px);
-  height: clamp(360px, 28vw, 520px);
+  width: clamp(430px, 36vw, 640px);
+  height: clamp(430px, 36vw, 640px);
   border-radius: 50%;
-  background: white;
+  background: #fff;
+  border: 1px solid #d4e3f9;
+  box-shadow: 0 24px 48px rgba(30, 93, 165, 0.2);
+  position: relative;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  margin-bottom: 1rem;
-  box-shadow: 0 20px 40px rgba(74, 144, 226, 0.2);
-  position: relative;
   overflow: hidden;
 }
 
 .timer-circle.cue-30s {
-  animation: cuePulse 0.6s ease-in-out 0s 3;
+  animation: cuePulse 0.62s ease-in-out 0s 3;
   box-shadow:
-    0 0 0 6px rgba(245, 158, 11, 0.35),
-    0 20px 40px rgba(245, 158, 11, 0.25);
+    0 0 0 7px rgba(245, 158, 11, 0.32),
+    0 24px 48px rgba(245, 158, 11, 0.24);
 }
 
 @keyframes cuePulse {
@@ -1438,406 +1335,384 @@ watch(
     transform: scale(1);
   }
   50% {
-    transform: scale(1.04);
+    transform: scale(1.03);
   }
   100% {
     transform: scale(1);
   }
 }
 
-/* 보충질의 오버레이 */
-.supplement-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.supplement-box {
-  background: rgba(255, 255, 255, 0.98);
-  border: 3px solid var(--primary-blue);
-  border-radius: 20px;
-  padding: 1.2rem 1.6rem;
-  text-align: center;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
-  transform: scale(1.08);
-}
-
-.supplement-label {
-  color: var(--primary-blue);
-  font-weight: 900;
-  font-size: 1.2rem;
-  margin-bottom: 0.3rem;
-  letter-spacing: 0.02em;
-}
-
-.supplement-time {
-  font-size: 3rem;
-  font-weight: 900;
-  color: #0b2239;
-  text-shadow: 0 2px 8px rgba(255, 255, 255, 0.45);
-}
-
-/* 개별 타이머 상단 텍스트는 전역 표시로 대체됨 */
-
 .progress-ring {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   z-index: 1;
 }
 
 .progress-svg {
-  width: clamp(360px, 28vw, 520px);
-  height: clamp(360px, 28vw, 520px);
+  width: 100%;
+  height: 100%;
   transform: rotate(-90deg) scaleY(-1);
 }
 
 .progress-ring-background {
-  stroke: #e9ecef;
+  stroke: #e8eef7;
   stroke-width: 8;
 }
 
 .progress-ring-progress {
   stroke-width: 8;
   stroke-linecap: round;
-  transition: stroke-dashoffset 0.8s ease;
+  transition: stroke-dashoffset 0.85s ease;
 }
 
 .timer-content {
-  position: relative;
   z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  justify-items: center;
 }
 
 .time-text {
-  font-size: 6rem;
-  font-weight: 700;
-  color: var(--primary-blue);
-  margin-bottom: 0.4rem;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  color: #14497f;
+  font-size: clamp(5rem, 8vw, 8.8rem);
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  text-shadow: 0 5px 14px rgba(20, 73, 127, 0.13);
 }
 
 .timer-label {
-  font-size: 1.8rem;
-  color: #555;
-  font-weight: 600;
-  margin-bottom: 0.2rem;
+  margin-top: 0.6rem;
+  max-width: min(540px, 80vw);
+  color: #3f6187;
+  font-size: clamp(1.25rem, 2vw, 2.2rem);
+  font-weight: 800;
   text-align: center;
-  max-width: 320px;
-  line-height: 1.3;
+  line-height: 1.28;
 }
 
-.step-indicator {
-  font-size: 1rem;
-  color: var(--primary-blue);
-  font-weight: 700;
-  background: rgba(74, 144, 226, 0.15);
-  padding: 0.4rem 1rem;
-  border-radius: 20px;
-  border: 2px solid rgba(74, 144, 226, 0.3);
-}
-
-/* 타이머 컨트롤 */
-.timer-controls {
+.supplement-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: rgba(12, 22, 39, 0.52);
   display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
+}
+
+.supplement-box {
+  border: 3px solid #71a6de;
+  border-radius: 20px;
+  padding: 1.1rem 1.5rem;
+  text-align: center;
+  background: #fff;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.36);
+}
+
+.supplement-label {
+  color: #225b98;
+  font-size: 1.16rem;
+  font-weight: 900;
+}
+
+.supplement-time {
+  margin-top: 0.2rem;
+  color: #0f3259;
+  font-size: clamp(2.4rem, 3.5vw, 3.8rem);
+  font-weight: 900;
+}
+
+.timer-controls {
+  width: min(900px, 100%);
+  display: grid;
+  gap: 0.75rem;
 }
 
 .control-row {
   display: flex;
-  gap: 0.5rem;
-  justify-content: center;
-  align-items: center;
   flex-wrap: wrap;
-  width: 100%;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
 .control-btn {
-  padding: 0.7rem 1rem;
+  height: 50px;
   border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 600;
+  border-radius: 11px;
+  padding: 0 1rem;
+  font-size: clamp(0.88rem, 1vw, 1.08rem);
+  font-weight: 800;
+  letter-spacing: 0.01em;
   cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
   justify-content: center;
+  gap: 0.34rem;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.15s ease;
 }
 
 .control-btn.play-pause {
-  background: #28a745;
-  color: white;
-  min-width: 110px;
-}
-
-.control-btn.edit {
-  background: #6b7280;
-  color: white;
-  min-width: 80px;
-}
-
-.control-btn.reset {
-  background: #dc3545;
-  color: white;
-  min-width: 80px;
+  background: linear-gradient(135deg, #189a74, #1d6da0);
+  color: #fff;
+  min-width: 142px;
 }
 
 .control-btn.step-btn {
-  background: var(--primary-blue);
-  color: white;
-  font-size: 0.8rem;
-  padding: 0.6rem 1rem;
-  min-width: 70px;
-}
-
-.control-btn.strategy {
-  background: #007bff;
-  color: white;
-  min-width: 100px;
+  background: #2e6eb4;
+  color: #fff;
+  min-width: 108px;
 }
 
 .control-btn.question {
-  background: #f59e0b;
-  color: white;
-  min-width: 100px;
+  background: #e9a322;
+  color: #fff;
+  min-width: 128px;
+}
+
+.control-btn.strategy {
+  background: #225c94;
+  color: #fff;
+  min-width: 128px;
+}
+
+.control-btn.edit {
+  background: #4e5f75;
+  color: #fff;
+  min-width: 92px;
 }
 
 .control-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(18, 57, 98, 0.24);
 }
 
 .control-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.48;
   cursor: not-allowed;
-  transform: none;
 }
 
 .control-btn .icon {
-  font-size: 1.1rem;
+  font-size: 1.08em;
 }
 
-/* 반응형 디자인 */
-@media (max-width: 768px) {
-  .timer-container {
-    padding: 0.5rem;
-  }
-
-  .timer-main {
-    min-height: calc(100vh - 180px);
-  }
-
-  .timer-main.ssu-mode {
-    flex-direction: column;
-    gap: 1.5rem;
-  }
-
-  .dual-timers {
-    flex-direction: column;
-    align-items: stretch;
-    max-width: 520px;
-  }
-
-  .debaters-left,
-  .debaters-right {
-    max-width: none;
-  }
-
-  .debater-icons {
-    flex-direction: row;
-    justify-content: center;
-    gap: 2rem;
-  }
-
-  /* 모바일에서 아바타 과도 확대 방지 */
-  .avatar {
-    width: 56px;
-    height: 56px;
-  }
-  .avatar-icon {
-    width: 30px;
-    height: 30px;
-  }
-
-  .timer-circle {
-    width: 260px;
-    height: 260px;
-  }
-
-  .debate-topic {
-    top: 6px;
-    max-width: 85%;
-    font-size: 0.85rem;
-  }
-
-  .time-text {
-    font-size: 3.5rem;
-  }
-
-  .timer-label {
-    font-size: 1.1rem;
-    max-width: 200px;
-  }
-
-  .step-indicator {
-    font-size: 0.9rem;
-    padding: 0.3rem 0.8rem;
-  }
-
-  .progress-svg {
-    width: 260px;
-    height: 260px;
-  }
-
-  .timer-controls {
-    gap: 2rem;
-  }
-
-  .control-row {
-    gap: 0.5rem;
-  }
-
-  .control-btn {
-    padding: 0.7rem 1rem;
-    font-size: 0.8rem;
-  }
-
-  .control-btn.play-pause {
-    min-width: 100px;
-  }
-
-  .control-btn.reset {
-    min-width: 70px;
-  }
-
-  .control-btn.step-btn {
-    min-width: 60px;
-    padding: 0.5rem 0.8rem;
-  }
-
-  .control-btn.strategy {
-    min-width: 80px;
-  }
-
-  .bottom-bar {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-
-  /* 모바일에서 사용 횟수 표시 최적화 */
-  .usage-counters {
-    margin-top: 0.6rem;
-    padding: 0.5rem;
-    gap: 0.6rem;
-  }
-
-  .counter-item {
-    padding: 0.4rem;
-  }
-
-  .counter-item h4 {
-    font-size: 1rem;
-  }
-
-  .counter-display {
-    gap: 0.5rem;
-  }
-
-  .dot {
-    width: 12px;
-    height: 12px;
-  }
-
-  .counter-text {
-    font-size: 0.7rem;
-    padding: 0.1rem 0.4rem;
-  }
-
-  /* 토론자 그룹 모바일 레이아웃 */
-  .debater-group {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
-  }
-
-  .debater-group h3 {
-    margin-bottom: 0.5rem;
-  }
+.dual-timers {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(0.8rem, 1.2vw, 1.25rem);
 }
 
-/* 하단 고정 바 */
-.bottom-bar {
-  position: sticky;
-  left: 0;
-  right: 0;
-  bottom: 0;
+.rect-timer {
+  border: 1px solid #d7e5f8;
+  border-radius: 16px;
   background: #fff;
-  border-top: 1px solid #e5e7eb;
-  padding: 0.75rem 1rem;
+  box-shadow: 0 18px 36px rgba(20, 67, 122, 0.14);
+  padding: clamp(1rem, 2vw, 1.5rem) 1.1rem;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+}
+
+.rect-timer.positive {
+  border-top: 4px solid #2f6eb6;
+}
+
+.rect-timer.negative {
+  border-top: 4px solid #d94e4e;
+}
+
+.rect-timer.active {
+  box-shadow:
+    0 20px 42px rgba(22, 74, 133, 0.24),
+    0 0 0 4px rgba(70, 132, 203, 0.12);
+}
+
+.rect-title {
+  color: #234c79;
+  font-size: clamp(1.2rem, 1.5vw, 1.6rem);
+  font-weight: 900;
+}
+
+.rect-time {
+  margin: 0.5rem 0 0.3rem;
+  color: #0f3f6f;
+  font-size: clamp(4.2rem, 7vw, 7.7rem);
+  line-height: 0.92;
+  font-weight: 900;
+  letter-spacing: -0.025em;
+}
+
+.sub-timer {
+  margin: 0.6rem 0 1.1rem;
+  border-radius: 10px;
+  border: 1px dashed #d7e1ee;
+  background: #f8fbff;
+  padding: 0.35rem 0.6rem;
+  color: #476486;
+}
+
+.sub-timer.warning {
+  border-color: #f6b761;
+  color: #9f4f04;
+  background: #fff5e8;
+}
+
+.sub-time {
+  font-size: clamp(2rem, 3vw, 3rem);
+  font-weight: 800;
+}
+
+.rect-controls {
   display: flex;
   justify-content: center;
+  gap: 0.55rem;
+}
+
+.bottom-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 8;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  padding: 0.62rem 1rem calc(0.62rem + env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: center;
+  background: rgba(15, 36, 63, 0.84);
+  border-top: 1px solid rgba(200, 220, 247, 0.28);
 }
 
 .finish-btn {
-  background: #dc3545;
-  color: white;
   border: none;
-  border-radius: 10px;
-  padding: 0.9rem 1.4rem;
-  font-weight: 700;
+  border-radius: 12px;
+  min-width: 154px;
+  height: 48px;
+  padding: 0 1.2rem;
+  color: #fff;
+  background: linear-gradient(135deg, #d84b4b, #b83f3f);
+  font-weight: 900;
+  font-size: 1rem;
   cursor: pointer;
 }
 
 .finish-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(220, 53, 69, 0.3);
+  box-shadow: 0 8px 18px rgba(216, 75, 75, 0.34);
 }
 
-/* 시간 수정 팝업 */
 .adjust-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  z-index: 50;
+  background: rgba(11, 23, 40, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 50;
 }
 
 .adjust-modal {
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 1rem 1.2rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.8rem;
-  min-width: 260px;
+  min-width: 280px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid #d9e6f8;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.25);
+  padding: 1rem;
+  display: grid;
+  justify-items: center;
+  gap: 0.74rem;
 }
 
 .adjust-title {
-  font-weight: 800;
-  color: #0b2239;
-  font-size: 1.1rem;
+  color: #164372;
+  font-weight: 900;
+  font-size: 1.15rem;
 }
 
 .adjust-actions {
   display: flex;
-  gap: 0.6rem;
+  gap: 0.5rem;
+}
+
+@media (max-width: 1360px) {
+  .timer-main.ssu-mode {
+    --debater-width: clamp(230px, 19vw, 300px);
+  }
+
+  .time-text {
+    font-size: clamp(4.2rem, 7vw, 7.2rem);
+  }
+}
+
+@media (max-width: 1080px) {
+  .timer-container {
+    padding: 0.55rem;
+  }
+
+  .mode-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .prepare-header {
+    flex-direction: column;
+  }
+
+  .debater-input-row {
+    grid-template-columns: 1fr;
+  }
+
+  .timer-main.ssu-mode {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    padding-top: 1.6rem;
+  }
+
+  .timer-main.ssu-mode .debate-topic-global {
+    position: static;
+    margin-bottom: 0.3rem;
+    padding: 0;
+  }
+
+  .debaters-left,
+  .debaters-right {
+    width: 100%;
+  }
+
+  .debater-icons {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    display: grid;
+  }
+
+  .dual-timers {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .timer-circle {
+    width: min(88vw, 430px);
+    height: min(88vw, 430px);
+  }
+
+  .time-text {
+    font-size: clamp(3.6rem, 12vw, 5.6rem);
+  }
+
+  .timer-label {
+    font-size: clamp(1rem, 4vw, 1.5rem);
+  }
+
+  .control-btn {
+    min-width: 96px !important;
+    height: 44px;
+    font-size: 0.86rem;
+  }
+
+  .rect-time {
+    font-size: clamp(3.2rem, 14vw, 5.3rem);
+  }
 }
 </style>

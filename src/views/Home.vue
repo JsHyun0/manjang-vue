@@ -1,5 +1,17 @@
 <template>
   <div class="home">
+    <section v-if="isAdmin" class="admin-hero">
+      <div class="admin-head">
+        <p class="admin-label">ADMIN MODE</p>
+        <h2>관리자 대시보드</h2>
+        <p>토론 목록에서 새 토론 생성/수정/삭제를 수행할 수 있습니다.</p>
+      </div>
+      <div class="admin-actions">
+        <router-link to="/record" class="admin-btn primary">토론 목록 보기</router-link>
+        <router-link to="/record/manage" class="admin-btn">토론 관리 페이지</router-link>
+      </div>
+    </section>
+
     <section class="hero">
       <div class="hero-content">
         <h1 class="hero-title">만장일치</h1>
@@ -33,6 +45,9 @@
 <script setup lang="ts">
 import heroImage from '@/assets/logo.jpeg'
 import naverCafeLogo from '@/assets/naver_cafe.webp'
+import { useAuth } from '@/lib/auth'
+
+const { isAdmin } = useAuth()
 </script>
 
 <style scoped>
@@ -42,6 +57,59 @@ import naverCafeLogo from '@/assets/naver_cafe.webp'
   display: flex;
   flex-direction: column;
   flex: 1;
+}
+
+.admin-hero {
+  max-width: 1000px;
+  margin: 0 auto 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(39, 130, 93, 0.25);
+  background: linear-gradient(135deg, #e8f8ef, #f6fcf9);
+  padding: 1.1rem 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.admin-label {
+  margin: 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: #19664a;
+  font-weight: 700;
+}
+
+.admin-head h2 {
+  margin: 0.2rem 0;
+  color: #14553d;
+}
+
+.admin-head p {
+  margin: 0;
+  color: #2f6f56;
+}
+
+.admin-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.admin-btn {
+  text-decoration: none;
+  border-radius: 10px;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid #a8d8c1;
+  color: #14553d;
+  background: #fff;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.admin-btn.primary {
+  background: #1d7f5a;
+  border-color: #1d7f5a;
+  color: #fff;
 }
 
 .hero {
@@ -173,6 +241,16 @@ import naverCafeLogo from '@/assets/naver_cafe.webp'
 }
 
 @media (max-width: 640px) {
+  .admin-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .admin-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
   .contact-footer {
     flex-direction: column;
     align-items: flex-start;

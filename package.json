@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
-    "format": "prettier --write src/"
+    "format": "prettier --write src/",
+    "seed:admin": "node scripts/create-admin-user.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.51.0",

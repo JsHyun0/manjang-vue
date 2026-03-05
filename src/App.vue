@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { signOutAuth, useAuth } from './lib/auth'
 const router = useRouter()
-const { isLoggedIn, userName } = useAuth()
+const { isLoggedIn, userName, isAdmin } = useAuth()
 
 const menuOpen = ref(false)
 
@@ -33,6 +33,11 @@ function goToTimerReset() {
     router.push(location)
   }
 }
+
+function goToDebateManage() {
+  menuOpen.value = false
+  router.push('/record/manage')
+}
 </script>
 
 <template>
@@ -49,15 +54,19 @@ function goToTimerReset() {
             >타이머</router-link
           >
           <router-link to="/reservation" class="nav-link">예약</router-link>
-          <router-link to="/record" class="nav-link">기록</router-link>
+          <router-link to="/record" class="nav-link">토론 목록</router-link>
           <router-link v-if="!isLoggedIn" to="/login" class="nav-link login-btn"
             >로그인/가입</router-link
           >
           <div v-else class="nav-user">
             <button type="button" class="nav-link user-pill" @click="menuOpen = !menuOpen">
-              {{ displayName(userName) }}
+              <span>{{ displayName(userName) }}</span>
+              <span v-if="isAdmin" class="admin-badge">관리자</span>
             </button>
             <div v-if="menuOpen" class="user-dropdown">
+              <button v-if="isAdmin" type="button" class="dropdown-item" @click="goToDebateManage">
+                토론 관리
+              </button>
               <button type="button" class="dropdown-item" @click="onLogout">로그아웃</button>
             </div>
           </div>
@@ -162,6 +171,22 @@ function goToTimerReset() {
   color: var(--primary-blue);
   border-radius: 16px;
   padding: 0.5rem 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.admin-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: #e7f8ef;
+  border: 1px solid #b4e1cd;
+  color: #166347;
+  font-size: 0.72rem;
+  font-weight: 700;
 }
 
 .nav-user {

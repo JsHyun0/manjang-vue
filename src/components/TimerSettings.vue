@@ -1,9 +1,17 @@
 <template>
   <div class="timer-settings">
-    <h3>시간 설정</h3>
+    <div class="settings-head">
+      <h3>단계별 시간 설정</h3>
+      <p>각 단계를 분/초로 조정하면 즉시 반영됩니다.</p>
+    </div>
     <div class="settings-grid">
       <div v-for="(phase, index) in phases" :key="index" class="setting-item">
-        <label :for="`phase-${index}`">{{ phase.name }}</label>
+        <div class="setting-title-row">
+          <label :for="`phase-${index}`">{{ phase.name }}</label>
+          <span class="phase-preview">
+            {{ Math.floor(phaseDurations[index] / 60) }}분 {{ phaseDurations[index] % 60 }}초
+          </span>
+        </div>
         <div class="input-group">
           <input
             :id="`phase-${index}-min`"
@@ -83,55 +91,72 @@ const onSecondsChange = (index: number, e: Event) => {
 
 <style scoped>
 .timer-settings {
-  margin-top: 3rem;
-  padding: 1.5rem 1.5rem 1rem;
-  background: #f8fafc;
+  margin-top: 1rem;
+  padding: 1rem;
+  background: linear-gradient(150deg, #f8fcff, #f2f8ff);
   border-radius: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #d6e4f6;
+}
+
+.settings-head {
+  margin-bottom: 0.85rem;
 }
 
 .timer-settings h3 {
-  margin: 0 0 1.25rem 0;
-  color: var(--primary-blue);
-  font-size: 1.25rem;
+  margin: 0;
+  color: #1f4f82;
+  font-size: clamp(1.04rem, 1.2vw, 1.3rem);
+}
+
+.settings-head p {
+  margin: 0.35rem 0 0;
+  color: #49698d;
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .settings-grid {
-  display: flex;
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 0.75rem;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding-bottom: 0.25rem;
-  -webkit-overflow-scrolling: touch;
 }
 
 .setting-item {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: stretch;
-  gap: 0.6rem;
-  padding: 0.9rem 1rem;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  display: grid;
+  gap: 0.58rem;
+  padding: 0.8rem;
+  background: #fff;
+  border: 1px solid #d7e5f8;
   border-radius: 12px;
-  box-sizing: border-box;
-  min-width: 200px;
-  /* width: clamp(320px, 34vw, 380px); */
-  width: 200px;
-  flex: 0 0 auto;
+  box-shadow: 0 8px 18px rgba(23, 90, 161, 0.08);
+}
+
+.setting-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .setting-item label {
-  color: #111827;
-  font-weight: 700;
-  font-size: 1rem;
+  color: #14395f;
+  font-weight: 800;
+  font-size: 0.95rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   display: block;
-  margin-bottom: 0.1rem;
+}
+
+.phase-preview {
+  font-size: 0.76rem;
+  color: #3f6389;
+  background: #ebf4ff;
+  border: 1px solid #cadcf1;
+  border-radius: 999px;
+  padding: 0.12rem 0.5rem;
+  white-space: nowrap;
+  font-weight: 700;
 }
 
 .input-group {
@@ -142,32 +167,41 @@ const onSecondsChange = (index: number, e: Event) => {
 }
 
 .duration-input {
-  width: 56px;
-  height: 36px;
-  padding: 0.45rem 0.5rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  width: 72px;
+  height: 44px;
+  padding: 0 0.5rem;
+  border: 1px solid #bdd4f0;
+  border-radius: 10px;
   text-align: center;
-  font-size: 1rem;
+  font-size: 1.14rem;
+  font-weight: 700;
+  color: #13395f;
+  background: #fafdff;
   box-sizing: border-box;
 }
 
 .duration-input:focus {
   outline: none;
-  border-color: var(--primary-blue);
-  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.15);
+  border-color: #77a8de;
+  box-shadow: 0 0 0 3px rgba(85, 147, 215, 0.18);
 }
 
 .unit {
-  color: #6b7280;
-  font-size: 0.9rem;
+  color: #4b688a;
+  font-size: 0.88rem;
+  font-weight: 700;
   margin: 0 2px;
 }
 
-/* 모바일 (단일 열) 보장 */
 @media (max-width: 640px) {
   .settings-grid {
     grid-template-columns: 1fr;
+  }
+
+  .duration-input {
+    width: 66px;
+    height: 40px;
+    font-size: 1.02rem;
   }
 }
 </style>
