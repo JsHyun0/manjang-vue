@@ -224,7 +224,7 @@ const truncateName = (name: string): string => {
 }
 
 .day {
-  height: 124px;
+  height: 100px;
   /* 그리드 아이템이 자식 콘텐츠 폭 때문에 컬럼을 밀지 않도록 */
   min-width: 0;
   display: flex;
@@ -377,7 +377,7 @@ const truncateName = (name: string): string => {
     grid-template-columns: repeat(7, 1fr);
   }
   .day {
-    height: 88px;
+    height: 78px;
     padding: 4px 6px 6px 6px;
   }
   .day-number {
@@ -407,7 +407,7 @@ const truncateName = (name: string): string => {
     font-size: 0.95rem;
   }
   .day {
-    height: 84px;
+    height: 74px;
   }
   .events {
     margin-top: 15px;
@@ -437,7 +437,7 @@ const truncateName = (name: string): string => {
     font-size: 0.75rem;
   }
   .day {
-    height: 84px;
+    height: 72px;
   }
   .day-number {
     font-size: 0.8rem;

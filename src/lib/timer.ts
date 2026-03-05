@@ -1,5 +1,8 @@
 import { ref, reactive, computed, onUnmounted } from 'vue'
 
+type IntervalHandle = ReturnType<typeof setInterval>
+type TimeoutHandle = ReturnType<typeof setTimeout>
+
 export interface SSUStep {
   title: string
   duration: number // 초 단위
@@ -94,15 +97,15 @@ export const useSSUTimer = () => {
   const dualNegativeTime = ref(0)
   const isDualPositiveRunning = ref(false)
   const isDualNegativeRunning = ref(false)
-  let dualPositiveInterval: number | null = null
-  let dualNegativeInterval: number | null = null
+  let dualPositiveInterval: IntervalHandle | null = null
+  let dualNegativeInterval: IntervalHandle | null = null
 
   // 듀얼 타이머 서브(연속 발언 제한) 타이머: 2분 제한
   const subTurnLimitSeconds = 120
   const dualPositiveSubRemaining = ref(subTurnLimitSeconds)
   const dualNegativeSubRemaining = ref(subTurnLimitSeconds)
-  let dualPositiveSubInterval: number | null = null
-  let dualNegativeSubInterval: number | null = null
+  let dualPositiveSubInterval: IntervalHandle | null = null
+  let dualNegativeSubInterval: IntervalHandle | null = null
 
   // 사용 횟수 관리
   const usageCounters = reactive<UsageCounters>({
@@ -116,10 +119,10 @@ export const useSSUTimer = () => {
     },
   })
 
-  let timerInterval: number | null = null
-  let supplementInterval: number | null = null
+  let timerInterval: IntervalHandle | null = null
+  let supplementInterval: IntervalHandle | null = null
   const supplementRemaining = ref(0)
-  let thirtyCueTimeout: number | null = null
+  let thirtyCueTimeout: TimeoutHandle | null = null
 
   const clearThirtySecondCue = () => {
     if (thirtyCueTimeout) {
@@ -567,8 +570,8 @@ export const useSSUTimer = () => {
 
   // 듀얼 타이머 제어 및 초기화
   const stopInterval = (
-    idRef: { value?: number | null } | (() => number | null),
-    setter?: (v: number | null) => void,
+    idRef: { value?: IntervalHandle | null } | (() => IntervalHandle | null),
+    setter?: (v: IntervalHandle | null) => void,
   ) => {
     const id = typeof idRef === 'function' ? idRef() : idRef.value
     if (id) {
@@ -645,9 +648,9 @@ export const useSSUTimer = () => {
     const otherRunningRef = isPos ? isDualNegativeRunning : isDualPositiveRunning
     let mainInterval = isPos ? dualPositiveInterval : dualNegativeInterval
     let subInterval = isPos ? dualPositiveSubInterval : dualNegativeSubInterval
-    const setMain = (v: number | null) =>
+    const setMain = (v: IntervalHandle | null) =>
       isPos ? (dualPositiveInterval = v) : (dualNegativeInterval = v)
-    const setSub = (v: number | null) =>
+    const setSub = (v: IntervalHandle | null) =>
       isPos ? (dualPositiveSubInterval = v) : (dualNegativeSubInterval = v)
     const subRemainRef = isPos ? dualPositiveSubRemaining : dualNegativeSubRemaining
 

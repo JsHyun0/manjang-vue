@@ -10,36 +10,6 @@
     </header> -->
 
     <main class="container main">
-      <div class="card mb">
-        <div class="toolbar">
-          <div class="field">
-            <label class="label" for="debate-select">토론 일정</label>
-            <select id="debate-select" class="input" v-model="reservationForm.debateId">
-              <option value="">선택 없음</option>
-              <option value="__custom__">직접 입력</option>
-            </select>
-          </div>
-          <div class="field" v-if="reservationForm.debateId === '__custom__'">
-            <label class="label" for="debate-title">토론 이름</label>
-            <input
-              id="debate-title"
-              class="input"
-              v-model="reservationForm.debateTitle"
-              placeholder="예: 10/25 회의 - 안건 검토"
-            />
-          </div>
-          <div class="field">
-            <label class="label" for="reserver-name">이름</label>
-            <input
-              id="reserver-name"
-              class="input"
-              v-model="reservationForm.name"
-              placeholder="예약자 이름을 입력하세요"
-            />
-          </div>
-        </div>
-      </div>
-
       <div class="calendar-full mb">
         <Calendar
           :currentYear="currentYear"
@@ -63,11 +33,57 @@
 
       <div class="card" v-show="isCardContentVisible">
         <div class="card-content">
+          <div class="toolbar">
+            <div class="field">
+              <label class="label" for="debate-select">토론 일정</label>
+              <select id="debate-select" class="input" v-model="reservationForm.debateId">
+                <option value="">선택 없음</option>
+                <option
+                  v-for="debate in selectableDebates"
+                  :key="debate.id"
+                  :value="debate.id"
+                >
+                  {{ formatDebateOption(debate) }}
+                </option>
+                <option value="__custom__">직접 입력</option>
+              </select>
+              <p v-if="isDebateLoading" class="field-hint">토론 일정을 불러오는 중...</p>
+              <p v-else-if="debateLoadError" class="field-hint error">{{ debateLoadError }}</p>
+              <p
+                v-else-if="selectableDebates.length === 0"
+                class="field-hint"
+              >
+                선택한 날짜({{ selectedDate }}) 이후 토론 일정이 없습니다.
+              </p>
+            </div>
+            <div class="field" v-if="reservationForm.debateId === '__custom__'">
+              <label class="label" for="debate-title">토론 이름</label>
+              <input
+                id="debate-title"
+                class="input"
+                v-model="reservationForm.debateTitle"
+                placeholder="예: 10/25 회의 - 안건 검토"
+              />
+            </div>
+            <div class="field">
+              <label class="label" for="reserver-name">이름</label>
+              <input
+                id="reserver-name"
+                class="input"
+                v-model="reservationForm.name"
+                placeholder="예약자 이름을 입력하세요"
+              />
+            </div>
+          </div>
+
           <div class="section">
             <div class="section-head">
               <h3 class="section-title">예약 현황 ({{ selectedDate }})</h3>
               <span v-if="isRefreshingDay || isPrefetchingMonth" class="status-chip">동기화 중</span>
             </div>
+            <p class="timeline-help">
+              시간표를 드래그하거나 탭해서 30분 단위로 선택할 수 있습니다.
+            </p>
             <div class="timeline-container" :class="{ 'is-loading': isRefreshingDay }">
               <div
                 class="timeline-grid"
@@ -87,16 +103,18 @@
                 <button
                   v-for="time in timeSlots"
                   :key="'cell-' + time"
+                  type="button"
                   class="time-cell"
                   :class="{
                     'is-selected': isSelected(time),
                     'is-hour': time.endsWith(':00'),
                     'has-event': isReservedTime(time),
                   }"
-                  :aria-label="`${time} 슬롯`"
-                  @mousedown="onSlotMouseDown(time, $event)"
-                  @mouseenter="onSlotMouseEnter(time)"
-                  @mouseleave="onSlotMouseLeave(time)"
+                  :aria-label="`${time} 슬롯 ${isSelected(time) ? '선택됨' : ''}`"
+                  :aria-pressed="isSelected(time)"
+                  @pointerdown="onSlotPointerDown(time, $event)"
+                  @pointerenter="onSlotPointerEnter(time, $event)"
+                  @click="onSlotClick(time)"
                 />
 
                 <!-- 오버레이 레이어 (절대 위치) -->
@@ -211,6 +229,7 @@ import {
 import { useAuth } from '@/lib/auth'
 import Calendar from '@/components/Calendar.vue'
 import { useCalendar } from '@/lib/calendar'
+import { listDebateItems, type DebateListItem } from '@/lib/debates'
 
 const today = new Date().toISOString().split('T')[0]
 const selectedDate = ref<string>(today)
@@ -221,13 +240,16 @@ const isPrefetchingMonth = ref(false)
 const isSubmittingReservation = ref(false)
 const isSavingEdit = ref(false)
 const isDeletingReservation = ref(false)
+const isDebateLoading = ref(false)
+const debateLoadError = ref('')
+const debateItems = ref<DebateListItem[]>([])
 
 const reservations = ref<ReservationSlot[]>([])
 const reservationForm = ref<{
   name: string
   selectedSlots: string[]
   debateId: string
-  debateTitle?: string
+  debateTitle: string
 }>({
   name: '',
   selectedSlots: [],
@@ -248,14 +270,67 @@ watch([isLoggedIn, userName], () => {
   }
 })
 
+const parseYmd = (ymd: string): Date => {
+  const [y, m, d] = ymd.split('-').map((v) => Number(v))
+  return new Date(y, m - 1, d)
+}
+
+const loadDebateItems = async () => {
+  isDebateLoading.value = true
+  debateLoadError.value = ''
+  try {
+    debateItems.value = await listDebateItems()
+  } catch (error: any) {
+    debateItems.value = []
+    debateLoadError.value = error?.message || '토론 일정 조회에 실패했습니다.'
+  } finally {
+    isDebateLoading.value = false
+  }
+}
+
+const selectableDebates = computed(() => {
+  const selectedBaseDate = parseYmd(selectedDate.value)
+  selectedBaseDate.setHours(0, 0, 0, 0)
+  return debateItems.value.filter((debate) => {
+    const debateDate = parseYmd(debate.date)
+    debateDate.setHours(0, 0, 0, 0)
+    return debateDate >= selectedBaseDate
+  })
+})
+
+const selectedDebate = computed(() =>
+  selectableDebates.value.find((debate) => debate.id === reservationForm.value.debateId),
+)
+
+const formatDebateOption = (debate: DebateListItem): string => {
+  return `${debate.date} · ${debate.topic}`
+}
+
+watch(
+  [selectedDate, selectableDebates],
+  () => {
+    if (!reservationForm.value.debateId || reservationForm.value.debateId === '__custom__') return
+    const stillValid = selectableDebates.value.some((debate) => debate.id === reservationForm.value.debateId)
+    if (!stillValid) reservationForm.value.debateId = ''
+  },
+  { immediate: true },
+)
+
+onMounted(() => {
+  void loadDebateItems()
+})
+
 // 선택 상태 (다중/비연속 지원)
 const selectedSet = ref<Set<string>>(new Set())
 
 // 드래그 선택 프레임
 const isDragging = ref(false)
+const isPointerDown = ref(false)
 const dragStart = ref<string | null>(null)
 const dragCurrent = ref<string | null>(null)
-const dragMode = ref<'select' | 'deselect'>('select')
+const pointerId = ref<number | null>(null)
+const dragMoved = ref(false)
+const suppressClickOnce = ref(false)
 let baseSetDuringDrag: Set<string> = new Set()
 
 const toIndex = (t: string) => timeSlots.findIndex((s) => s === t)
@@ -288,50 +363,76 @@ const effectiveSelectedHas = (time: string): boolean => {
 
 const isSelected = (time: string) => effectiveSelectedHas(time)
 
-const onSlotMouseDown = (time: string, e?: MouseEvent) => {
+const clearDragState = () => {
+  isDragging.value = false
+  isPointerDown.value = false
+  dragStart.value = null
+  dragCurrent.value = null
+  pointerId.value = null
+  dragMoved.value = false
+}
+
+const onSlotPointerDown = (time: string, e: PointerEvent) => {
   if (isBusy.value || isRefreshingDay.value) return
-  e?.preventDefault()
-  e?.stopPropagation()
+  e.preventDefault()
+  e.stopPropagation()
+  isPointerDown.value = true
   isDragging.value = true
+  pointerId.value = e.pointerId
   dragStart.value = time
   dragCurrent.value = time
+  dragMoved.value = false
   baseSetDuringDrag = new Set(selectedSet.value)
-  dragMode.value = baseSetDuringDrag.has(time) ? 'deselect' : 'select'
 }
 
-const onSlotMouseEnter = (time: string) => {
-  if (!isDragging.value) return
+const onSlotPointerEnter = (time: string, e: PointerEvent) => {
+  if (!isPointerDown.value || !isDragging.value) return
+  if (pointerId.value !== null && e.pointerId !== pointerId.value) return
+  if (dragCurrent.value !== time) dragMoved.value = true
   dragCurrent.value = time
 }
 
-const handleMouseUp = () => {
-  if (!isDragging.value || !dragStart.value || !dragCurrent.value) {
-    isDragging.value = false
-    dragStart.value = null
-    dragCurrent.value = null
+const handlePointerUp = (e?: PointerEvent) => {
+  if (!isPointerDown.value || !isDragging.value || !dragStart.value || !dragCurrent.value) {
+    clearDragState()
     return
   }
+  if (e && pointerId.value !== null && e.pointerId !== pointerId.value) return
+
   const range = computeRange(dragStart.value, dragCurrent.value)
   const allSelected = range.every((t) => baseSetDuringDrag.has(t))
   const next = new Set(baseSetDuringDrag)
-  // 토글 규칙: 범위 내 모든 슬롯이 이미 선택되어 있으면 해제, 아니면 선택
+
   if (allSelected) {
     range.forEach((t) => next.delete(t))
   } else {
     range.forEach((t) => next.add(t))
   }
   selectedSet.value = next
-  isDragging.value = false
-  dragStart.value = null
-  dragCurrent.value = null
+  suppressClickOnce.value = true
+  clearDragState()
 }
 
-onMounted(() => document.addEventListener('mouseup', handleMouseUp))
-onBeforeUnmount(() => document.removeEventListener('mouseup', handleMouseUp))
-
-const onSlotMouseLeave = (_time: string) => {
-  if (!isDragging.value) return
+const onSlotClick = (time: string) => {
+  if (isBusy.value || isRefreshingDay.value) return
+  if (suppressClickOnce.value) {
+    suppressClickOnce.value = false
+    return
+  }
+  const next = new Set(selectedSet.value)
+  if (next.has(time)) next.delete(time)
+  else next.add(time)
+  selectedSet.value = next
 }
+
+onMounted(() => {
+  document.addEventListener('pointerup', handlePointerUp)
+  document.addEventListener('pointercancel', handlePointerUp)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerup', handlePointerUp)
+  document.removeEventListener('pointercancel', handlePointerUp)
+})
 
 const selectedTimes = computed(() =>
   Array.from(selectedSet.value).sort((a, b) => toIndex(a) - toIndex(b)),
@@ -366,12 +467,16 @@ const handleReservation = async () => {
     const title =
       reservationForm.value.debateId === '__custom__'
         ? reservationForm.value.debateTitle || null
+        : selectedDebate.value?.topic || null
+    const debateId =
+      reservationForm.value.debateId && reservationForm.value.debateId !== '__custom__'
+        ? reservationForm.value.debateId
         : null
     await createReservations(
       selectedDate.value,
       reservationForm.value.name.trim(),
       selectedTimes.value,
-      title,
+      { title, debateId },
     )
     await refreshReservations()
     await prefetchMonthReservations()
@@ -722,15 +827,25 @@ const onSelectCalendarDate = (date: Date) => {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
-  padding: 1rem;
+  padding: 0;
+  margin-bottom: 0.85rem;
   align-items: flex-end;
 }
 .field {
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
-  flex: 1 1 240px;
+  flex: 1 1 260px;
   min-width: 220px;
+}
+.field-hint {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+.field-hint.error {
+  color: #b91c1c;
 }
 .card-title {
   font-size: 1rem;
@@ -947,6 +1062,11 @@ const onSelectCalendarDate = (date: Date) => {
   color: #64748b;
   line-height: 1.5;
 }
+.timeline-help {
+  margin: 0 0 0.5rem;
+  color: #5f6f84;
+  font-size: 0.82rem;
+}
 .select-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1020,7 +1140,7 @@ const onSelectCalendarDate = (date: Date) => {
     padding-bottom: 1.25rem;
   }
   .toolbar {
-    padding: 0.75rem;
+    padding: 0;
     gap: 0.625rem;
     align-items: stretch;
   }
@@ -1066,22 +1186,23 @@ const onSelectCalendarDate = (date: Date) => {
 
 /* Timeline */
 .timeline-container {
-  --slot-width: 40px;
+  --slot-width: 38px;
   overflow-x: auto;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   background: #ffffff;
   user-select: none;
+  -webkit-overflow-scrolling: touch;
 }
 .timeline-container.is-loading {
   opacity: 0.74;
 }
 @media (max-width: 450px) {
   .timeline-container {
-    --slot-width: 30px; /* 터치성과 가시성 균형 */
+    --slot-width: 34px;
   }
   .time-label {
-    font-size: 0.68rem;
+    font-size: 0.7rem;
   }
 }
 
@@ -1112,16 +1233,24 @@ const onSelectCalendarDate = (date: Date) => {
 .time-cell {
   grid-row: 2;
   width: var(--slot-width);
-  height: calc(var(--row-height) + 8px); /* 높이 소폭 상향 */
+  height: var(--row-height);
   border: none;
   border-right: 1px solid #eef2f7;
   background: #f8fafc;
   cursor: pointer;
   transition: background-color 0.06s linear;
   position: relative;
+  touch-action: none;
 }
 .time-cell:hover {
   background: #f1f5f9;
+}
+.time-cell:active {
+  background: #dbeafe;
+}
+.time-cell:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
 }
 .time-cell.has-event {
   background: #f3f7ff;
@@ -1178,13 +1307,14 @@ const onSelectCalendarDate = (date: Date) => {
   position: absolute;
   top: 4px;
   height: calc(var(--row-height) - 8px);
-  background: transparent; /* 내부 채움 제거 */
-  border: 2px solid rgba(74, 144, 226, 0.9); /* 선명한 직선 테두리 */
-  border-radius: 0; /* 둥근 모서리 제거 */
+  background: rgba(96, 165, 250, 0.15);
+  border: 2px solid rgba(59, 130, 246, 0.9);
+  border-radius: 4px;
   z-index: 1; /* 셀 위에 보이게, 이벤트 라벨(z=2)보다 아래 */
 }
 .selection-abs.preview {
   border-style: dashed;
+  background: rgba(147, 197, 253, 0.18);
 }
 .selection-abs.confirmed {
   border-style: solid;

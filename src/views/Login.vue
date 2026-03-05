@@ -26,8 +26,30 @@
 
       <form @submit.prevent="submitAuth" class="auth-form">
         <div v-if="mode === 'signup'" class="form-group">
-          <label for="name">이름 (선택)</label>
-          <input id="name" v-model="name" autocomplete="name" placeholder="예: 홍길동" />
+          <label for="name">이름</label>
+          <input id="name" v-model="name" autocomplete="name" placeholder="예: 홍길동" required />
+        </div>
+
+        <div v-if="mode === 'signup'" class="form-group">
+          <label for="student-id">학번</label>
+          <input
+            id="student-id"
+            v-model="studentId"
+            autocomplete="off"
+            placeholder="예: 20241234"
+            required
+          />
+        </div>
+
+        <div v-if="mode === 'signup'" class="form-group">
+          <label for="major">학과</label>
+          <input
+            id="major"
+            v-model="major"
+            autocomplete="organization"
+            placeholder="예: 컴퓨터공학과"
+            required
+          />
         </div>
 
         <div class="form-group">
@@ -55,6 +77,23 @@
           />
         </div>
 
+        <div v-if="mode === 'signin'" class="forgot-wrap">
+          <button type="button" class="forgot-btn" @click="showResetPanel = !showResetPanel">
+            {{ showResetPanel ? '닫기' : '비밀번호를 잊으셨나요?' }}
+          </button>
+          <div v-if="showResetPanel" class="forgot-panel">
+            <p>입력한 이메일로 비밀번호 재설정 링크를 발송합니다.</p>
+            <button
+              type="button"
+              class="forgot-send-btn"
+              :disabled="sendingReset"
+              @click="submitPasswordReset"
+            >
+              {{ sendingReset ? '발송 중...' : '재설정 메일 보내기' }}
+            </button>
+          </div>
+        </div>
+
         <button class="submit-btn" type="submit" :disabled="submitting">
           {{ submitting ? '처리 중...' : submitButtonText }}
         </button>
@@ -64,6 +103,7 @@
       <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
       <p class="help-text">
         회원가입 시 인증 메일이 발송되며, 메일 인증 완료 후 로그인할 수 있습니다.
+        관리자 계정은 동일한 로그인 화면에서 자동 인식됩니다.
       </p>
 
       <div class="back-home">
@@ -75,22 +115,33 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { signInWithEmail, signUpWithEmail, useAuth } from '@/lib/auth'
+import { useRoute, useRouter } from 'vue-router'
+import { sendPasswordResetEmail, signInWithEmail, signUpWithEmail, useAuth } from '@/lib/auth'
 
 const router = useRouter()
+const route = useRoute()
 const { isLoggedIn } = useAuth()
 const mode = ref<'signin' | 'signup'>('signin')
 const name = ref('')
+const studentId = ref('')
+const major = ref('')
 const email = ref('')
 const password = ref('')
+const showResetPanel = ref(false)
+const sendingReset = ref(false)
 const submitting = ref(false)
 const noticeMessage = ref('')
 const errorMessage = ref('')
 
-const submitButtonText = computed(() => (mode.value === 'signin' ? '로그인' : '회원가입'))
+const submitButtonText = computed(() => {
+  if (mode.value === 'signup') return '회원가입'
+  return '로그인'
+})
 
 onMounted(() => {
+  if (route.query.reset === 'done') {
+    noticeMessage.value = '비밀번호가 변경되었습니다. 새 비밀번호로 로그인해주세요.'
+  }
   if (isLoggedIn.value) {
     router.replace('/home')
   }
@@ -98,6 +149,7 @@ onMounted(() => {
 
 function changeMode(nextMode: 'signin' | 'signup') {
   mode.value = nextMode
+  showResetPanel.value = false
   noticeMessage.value = ''
   errorMessage.value = ''
 }
@@ -116,24 +168,54 @@ function toFriendlyError(message: string): string {
   if (/password should be at least/i.test(message)) {
     return '비밀번호는 최소 6자 이상이어야 합니다.'
   }
+  if (/security purposes/i.test(message) || /rate limit/i.test(message)) {
+    return '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.'
+  }
   return message
+}
+
+async function submitPasswordReset() {
+  noticeMessage.value = ''
+  errorMessage.value = ''
+
+  if (!email.value.trim()) {
+    errorMessage.value = '비밀번호 재설정 메일을 받을 이메일을 입력해주세요.'
+    return
+  }
+
+  sendingReset.value = true
+  try {
+    await sendPasswordResetEmail(email.value.trim())
+    noticeMessage.value = '비밀번호 재설정 메일을 보냈습니다. 메일의 링크를 눌러 비밀번호를 변경해주세요.'
+    showResetPanel.value = false
+    password.value = ''
+  } catch (error: any) {
+    errorMessage.value = toFriendlyError(error?.message ?? '')
+  } finally {
+    sendingReset.value = false
+  }
 }
 
 async function submitAuth() {
   noticeMessage.value = ''
   errorMessage.value = ''
-  if (!email.value.trim() || !password.value) {
-    errorMessage.value = '이메일과 비밀번호를 입력해주세요.'
-    return
-  }
 
   submitting.value = true
   try {
+    if (!email.value.trim() || !password.value) {
+      errorMessage.value = '이메일과 비밀번호를 입력해주세요.'
+      return
+    }
+
     if (mode.value === 'signup') {
       const needsVerification = await signUpWithEmail(
         email.value.trim(),
         password.value,
-        name.value.trim(),
+        {
+          name: name.value,
+          studentId: studentId.value,
+          major: major.value,
+        },
       )
       if (needsVerification) {
         noticeMessage.value = '회원가입 완료: 인증 메일을 확인한 뒤 로그인해주세요.'
@@ -254,6 +336,53 @@ async function submitAuth() {
 
 .submit-btn:disabled {
   opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.forgot-wrap {
+  margin: -0.25rem 0 1rem;
+}
+
+.forgot-btn {
+  border: none;
+  background: transparent;
+  color: #1f5ec8;
+  font-size: 0.88rem;
+  padding: 0;
+  cursor: pointer;
+}
+
+.forgot-btn:hover {
+  text-decoration: underline;
+}
+
+.forgot-panel {
+  margin-top: 0.65rem;
+  padding: 0.75rem;
+  border: 1px solid #d8e3f7;
+  background: #f8fbff;
+  border-radius: 10px;
+}
+
+.forgot-panel p {
+  margin: 0 0 0.55rem;
+  color: #3d4f72;
+  font-size: 0.85rem;
+}
+
+.forgot-send-btn {
+  border: 1px solid #9ab7eb;
+  border-radius: 8px;
+  padding: 0.5rem 0.65rem;
+  background: #fff;
+  color: #144a9e;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.forgot-send-btn:disabled {
+  opacity: 0.65;
   cursor: not-allowed;
 }
 

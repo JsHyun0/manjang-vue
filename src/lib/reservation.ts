@@ -165,7 +165,7 @@ export const createReservations = async (
   date: string,
   name: string,
   times: string[],
-  title?: string | null,
+  options?: { title?: string | null; debateId?: string | null },
 ): Promise<void> => {
   const groups = groupContiguous(times)
   for (const group of groups) {
@@ -173,10 +173,10 @@ export const createReservations = async (
     const end = nextSlot(group[group.length - 1])
     const payload = {
       reserved_by_name: name,
-      title: title ?? null,
+      title: options?.title ?? null,
       starts_at: toIsoAt(date, start),
       ends_at: toIsoAt(date, end),
-      debate_id: null,
+      debate_id: options?.debateId ?? null,
     }
     try {
       const { error } = await supabase.from('reservations').insert(payload)
@@ -184,14 +184,14 @@ export const createReservations = async (
         const msg = error.message || 'Failed to create reservation'
         // If table is missing, store locally as a soft-fallback
         if (/relation .*reservations.* does not exist/i.test(msg)) {
-          addMemoryReservation(date, name, start, end, title ?? null)
+          addMemoryReservation(date, name, start, end, options?.title ?? null)
           continue
         }
         throw new Error(msg)
       }
     } catch (_err) {
       // Network or unexpected error -> soft-fallback to local memory
-      addMemoryReservation(date, name, start, end, title ?? null)
+      addMemoryReservation(date, name, start, end, options?.title ?? null)
     }
   }
 }
