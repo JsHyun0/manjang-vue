@@ -10,7 +10,7 @@ export const generateTimeSlots = (): string[] => {
   for (let hour = 8; hour <= 23; hour++) {
     const hh = hour.toString().padStart(2, '0')
     slots.push(`${hh}:00`)
-    if (hour < 23) slots.push(`${hh}:30`)
+    slots.push(`${hh}:30`)
   }
   return slots
 }
@@ -28,7 +28,13 @@ type ApiReservation = {
 }
 
 const pad = (n: number) => n.toString().padStart(2, '0')
-const toIsoAt = (date: string, time: string) => `${date}T${time}:00Z`
+const toIsoAt = (date: string, time: string) => {
+  const [year, month, day] = date.split('-').map(Number)
+  const [hour, minute] = time.split(':').map(Number)
+  const baseUtc = Date.UTC(year, month - 1, day, 0, 0, 0)
+  const totalMinutes = hour * 60 + minute
+  return new Date(baseUtc + totalMinutes * 60000).toISOString()
+}
 
 const parseIsoToDate = (iso: string) => new Date(iso)
 const minutesBetween = (a: Date, b: Date) => Math.round((b.getTime() - a.getTime()) / 60000)
@@ -73,6 +79,7 @@ const nextSlot = (time: string): string => {
   const [hh, mm] = time.split(':').map(Number)
   const date = new Date(Date.UTC(2000, 0, 1, hh, mm))
   date.setUTCMinutes(date.getUTCMinutes() + 30)
+  if (date.getUTCDate() !== 1) return '24:00'
   return `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`
 }
 
@@ -81,7 +88,10 @@ const groupContiguous = (times: string[]): string[][] => {
   const groups: string[][] = []
   let cur: string[] = []
   for (let i = 0; i < sorted.length; i++) {
-    if (i === 0) { cur = [sorted[i]]; continue }
+    if (i === 0) {
+      cur = [sorted[i]]
+      continue
+    }
     const prev = sorted[i - 1]
     const t = sorted[i]
     if (nextSlot(prev) === t) {
@@ -95,7 +105,12 @@ const groupContiguous = (times: string[]): string[][] => {
   return groups
 }
 
-export const createReservations = async (date: string, name: string, times: string[]): Promise<void> => {
+export const createReservations = async (
+  date: string,
+  name: string,
+  times: string[],
+  debateId?: string | null,
+): Promise<void> => {
   const groups = groupContiguous(times)
   for (const group of groups) {
     const start = group[0]
@@ -105,7 +120,7 @@ export const createReservations = async (date: string, name: string, times: stri
       title: null,
       starts_at: toIsoAt(date, start),
       ends_at: toIsoAt(date, end),
-      debate_id: null,
+      debate_id: debateId || null,
     }
     try {
       const res = await fetch(`${API_BASE}/reservations`, {
@@ -143,5 +158,3 @@ const addMemoryReservation = (date: string, name: string, startTime: string, end
   })
   memoryByDate.set(date, list)
 }
-
-
