@@ -38,6 +38,12 @@ const toIsoAt = (date: string, time: string) => {
 
 const parseIsoToDate = (iso: string) => new Date(iso)
 const minutesBetween = (a: Date, b: Date) => Math.round((b.getTime() - a.getTime()) / 60000)
+const addDaysToDateKey = (dateKey: string, days: number): string => {
+  const [year, month, day] = dateKey.split('-').map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day))
+  date.setUTCDate(date.getUTCDate() + days)
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`
+}
 
 const generateHalfHourSlotsBetween = (startIso: string, endIso: string): string[] => {
   const start = parseIsoToDate(startIso)
@@ -72,6 +78,53 @@ export const listReservationsByDate = async (date: string): Promise<ReservationS
     console.error(e)
     // fallback to local memory cache
     return memoryByDate.get(date) ?? []
+  }
+}
+
+export const listReservationsByDateRange = async (
+  dateKeys: string[],
+): Promise<Record<string, ReservationSlot[]>> => {
+  const uniqueSorted = Array.from(new Set(dateKeys)).sort()
+  if (uniqueSorted.length === 0) return {}
+
+  const requested = new Set(uniqueSorted)
+  const first = uniqueSorted[0]
+  const last = uniqueSorted[uniqueSorted.length - 1]
+  const endExclusive = addDaysToDateKey(last, 1)
+
+  try {
+    const res = await fetch(
+      `${API_BASE}/reservations?start=${encodeURIComponent(first)}&end=${encodeURIComponent(endExclusive)}`,
+    )
+    if (!res.ok) throw new Error(`Failed to fetch range reservations: ${res.status}`)
+    const data: ApiReservation[] = await res.json()
+
+    const byDate: Record<string, ReservationSlot[]> = {}
+    uniqueSorted.forEach((dateKey) => {
+      byDate[dateKey] = [...(memoryByDate.get(dateKey) ?? [])]
+    })
+
+    for (const r of data) {
+      const dateKey = r.starts_at.slice(0, 10)
+      if (!requested.has(dateKey)) continue
+      const slots = generateHalfHourSlotsBetween(r.starts_at, r.ends_at)
+      const displayName = r.reserved_by_name || r.reserved_by || '익명'
+      for (const time of slots) {
+        byDate[dateKey].push({ id: Number(r.id) || 0, date: dateKey, timeSlot: time, name: displayName })
+      }
+    }
+
+    return byDate
+  } catch (e) {
+    console.error(e)
+    const entries = await Promise.all(
+      uniqueSorted.map(async (dateKey) => [dateKey, await listReservationsByDate(dateKey)] as const),
+    )
+    const fallback: Record<string, ReservationSlot[]> = {}
+    entries.forEach(([dateKey, list]) => {
+      fallback[dateKey] = list
+    })
+    return fallback
   }
 }
 

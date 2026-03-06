@@ -183,7 +183,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   createReservations,
   generateTimeSlots,
-  listReservationsByDate,
+  listReservationsByDateRange,
   type ReservationSlot,
 } from '@/lib/reservation'
 import { useAuth } from '@/lib/auth'
@@ -641,17 +641,13 @@ const refreshWeekReservations = async () => {
   isLoadingWeek.value = true
 
   try {
-    const entries = await Promise.all(
-      weekDateKeys.value.map(
-        async (dateKey) => [dateKey, await listReservationsByDate(dateKey)] as const,
-      ),
-    )
+    const byDate = await listReservationsByDateRange(weekDateKeys.value)
 
     if (requestId !== fetchRequestId) return
 
     const next: Record<string, ReservationSlot[]> = {}
-    entries.forEach(([dateKey, list]) => {
-      next[dateKey] = list
+    weekDateKeys.value.forEach((dateKey) => {
+      next[dateKey] = byDate[dateKey] ?? []
     })
 
     reservationsByDate.value = next
