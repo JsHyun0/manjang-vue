@@ -95,6 +95,7 @@ function goToDebateManage() {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.75rem;
   padding: 1rem 2rem;
 }
 
@@ -106,12 +107,16 @@ function goToDebateManage() {
   color: var(--primary-blue);
   font-weight: 800;
   font-size: 1.2rem;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .nav-menu {
   display: flex;
   gap: 2rem;
   align-items: center;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .nav-link {
@@ -122,6 +127,7 @@ function goToDebateManage() {
   border-radius: 6px;
   transition: all 0.3s ease;
   position: relative;
+  white-space: nowrap;
 }
 
 .nav-link:hover {
@@ -230,16 +236,34 @@ function goToDebateManage() {
 
 @media (max-width: 768px) {
   .nav-container {
-    padding: 1rem;
+    padding: 0.8rem 0.75rem;
+  }
+
+  .nav-logo {
+    font-size: 1rem;
   }
 
   .nav-menu {
-    gap: 1rem;
+    gap: 0.45rem;
+    flex: 1;
+    justify-content: flex-end;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .nav-menu::-webkit-scrollbar {
+    display: none;
   }
 
   .nav-link {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.9rem;
+    padding: 0.34rem 0.58rem;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+  }
+
+  .user-pill {
+    padding: 0.34rem 0.58rem;
   }
 }
 
