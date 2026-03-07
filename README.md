@@ -28,6 +28,7 @@ Create `manjang-vue/.env` with:
 VITE_SUPABASE_URL=your_supabase_project_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 VITE_API_BASE=http://localhost:8000
+VITE_PUBLIC_SITE_URL=https://your-production-domain
 ```
 
 관리자 계정은 별도 로그인 모드가 아니라, Supabase `public.users.role = 'admin'`인 이메일 계정으로 동일한 로그인 화면에서 로그인하면 자동으로 관리자 권한이 적용됩니다.
@@ -55,9 +56,21 @@ npm run seed:admin
 
 - 로그인 화면의 `비밀번호를 잊으셨나요?` 버튼으로 재설정 메일을 발송할 수 있습니다.
 - 메일 링크는 `/reset-password` 페이지로 이동해 새 비밀번호를 입력받습니다.
+- 프론트엔드는 `VITE_PUBLIC_SITE_URL`이 있으면 해당 도메인으로, 없으면 현재 접속 도메인(`window.location.origin`)으로 리다이렉트 URL을 생성합니다.
 - Supabase Dashboard > Authentication > URL Configuration에서 아래 URL을 Redirect URL에 포함해야 합니다.
   - 개발: `http://localhost:5173/reset-password`
   - 운영: `https://<your-domain>/reset-password`
+
+### Supabase Email Redirect Checklist
+
+- Supabase Dashboard > Authentication > URL Configuration > **Site URL**을 운영 도메인으로 설정하세요.
+  - 예: `https://<your-domain>`
+- **Redirect URLs**에 운영/개발 URL을 모두 등록하세요.
+  - `https://<your-domain>/login`
+  - `https://<your-domain>/reset-password`
+  - `http://localhost:5173/login`
+  - `http://localhost:5173/reset-password`
+- Vercel/Netlify 등 배포 환경 변수에 `VITE_PUBLIC_SITE_URL=https://<your-domain>`를 설정하고 재배포하세요.
 
 ### Compile and Hot-Reload for Development
 

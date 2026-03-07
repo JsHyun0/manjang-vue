@@ -300,6 +300,7 @@ const selectedSet = ref<Set<string>>(new Set())
 const debateSchedules = ref<DebateListItem[]>([])
 const isLoadingDebateSchedules = ref(false)
 const debateScheduleLoadError = ref('')
+const hasLoadedDebateSchedules = ref(false)
 const selectedDebateId = computed(() =>
   reservationForm.value.scheduleMode === 'debate' ? reservationForm.value.debateId || null : null,
 )
@@ -312,6 +313,7 @@ const refreshDebateSchedules = async () => {
   debateScheduleLoadError.value = ''
   try {
     debateSchedules.value = await listDebateItems()
+    hasLoadedDebateSchedules.value = true
   } catch (e: any) {
     debateScheduleLoadError.value = e?.message || '토론 일정 목록을 불러오지 못했습니다.'
     debateSchedules.value = []
@@ -846,6 +848,9 @@ watch(
 watch(
   () => reservationForm.value.scheduleMode,
   (mode) => {
+    if (mode === 'debate' && !hasLoadedDebateSchedules.value && !isLoadingDebateSchedules.value) {
+      void refreshDebateSchedules()
+    }
     if (mode !== 'debate') {
       reservationForm.value.debateId = ''
     }
@@ -876,7 +881,6 @@ onMounted(() => {
   window.addEventListener('resize', updateViewportMode)
   document.addEventListener('mousemove', handleMouseMove)
   document.addEventListener('mouseup', handleMouseUp)
-  void refreshDebateSchedules()
   void scrollToDefaultTime()
 })
 

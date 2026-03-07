@@ -28,6 +28,17 @@ const userRef = ref<AuthUser | null>(null)
 const readyRef = ref(false)
 let initPromise: Promise<void> | null = null
 
+const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, '')
+
+const getAuthRedirectUrl = (path: '/login' | '/reset-password'): string => {
+  const configuredBase = import.meta.env.VITE_PUBLIC_SITE_URL?.trim()
+  const base =
+    configuredBase && configuredBase.length > 0
+      ? trimTrailingSlash(configuredBase)
+      : window.location.origin
+  return `${base}${path}`
+}
+
 const normalizeRole = (value: string | null | undefined): AuthRole => {
   return value === 'admin' ? 'admin' : 'member'
 }
@@ -143,7 +154,7 @@ export async function signUpWithEmail(
     emailRedirectTo: string
     data: { name: string; student_id: string; sid: string; major: string }
   } = {
-    emailRedirectTo: `${window.location.origin}/login`,
+    emailRedirectTo: getAuthRedirectUrl('/login'),
     data: {
       name: cleanName,
       student_id: cleanStudentId,
@@ -179,7 +190,7 @@ export async function sendPasswordResetEmail(email: string): Promise<void> {
   }
 
   const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-    redirectTo: `${window.location.origin}/reset-password`,
+    redirectTo: getAuthRedirectUrl('/reset-password'),
   })
   if (error) throw error
 }
