@@ -6,8 +6,7 @@
           <div class="schedule-panel">
             <header class="schedule-head">
               <div class="schedule-title-group">
-                <h2 class="schedule-range">예약</h2>
-                <p class="schedule-subtitle">{{ weekRangeLabel }}</p>
+                <h2 class="schedule-range">{{ currentMonthLabel }}</h2>
               </div>
 
               <div class="nav-controls">
@@ -34,8 +33,9 @@
                 '--slot-count': String(timeSlots.length),
                 '--slot-height': `${slotHeight}px`,
                 '--day-count': String(weekDays.length),
-                '--day-min-width': isMobile ? '136px' : '156px',
+                '--day-min-width': isMobile ? '136px' : '148px',
               }"
+              @mousedown="onWeekScrollerMouseDown"
             >
               <div class="week-grid-wrap" :class="periodAnimationClass">
                 <div class="week-grid">
@@ -47,8 +47,7 @@
                     class="day-head"
                     :class="{ 'is-today': isToday(day.key), 'is-past': isPastDate(day.key) }"
                   >
-                    <span class="day-name">{{ day.weekday }}</span>
-                    <span class="day-date">{{ day.month }}/{{ day.day }}</span>
+                    <span class="day-display">{{ day.day }}일 ({{ day.weekday }})</span>
                   </div>
 
                   <div class="time-column">
@@ -140,17 +139,44 @@
                 </div>
 
                 <div class="field">
-                  <label class="label" for="debate-schedule">토론 일정</label>
-                  <select id="debate-schedule" class="select" v-model="reservationForm.debateId">
-                    <option value="">선택 안 함</option>
-                    <option
-                      v-for="schedule in debateScheduleOptions"
-                      :key="schedule.id"
-                      :value="schedule.id"
-                    >
-                      {{ schedule.label }}
-                    </option>
+                  <label class="label" for="schedule-mode">토론 일정 연동</label>
+                  <select id="schedule-mode" class="select" v-model="reservationForm.scheduleMode">
+                    <option value="none">선택 안 함</option>
+                    <option value="debate">등록된 토론에서 선택</option>
+                    <option value="custom">직접 용도 입력</option>
                   </select>
+
+                  <template v-if="reservationForm.scheduleMode === 'debate'">
+                    <select id="debate-schedule" class="select" v-model="reservationForm.debateId">
+                      <option value="">
+                        {{
+                          isLoadingDebateSchedules
+                            ? '토론 일정 불러오는 중...'
+                            : filteredDebateSchedules.length > 0
+                              ? '토론 일정을 선택하세요'
+                              : '선택 가능한 토론 일정이 없습니다'
+                        }}
+                      </option>
+                      <option v-for="debate in filteredDebateSchedules" :key="debate.id" :value="debate.id">
+                        {{ formatDebateScheduleLabel(debate) }}
+                      </option>
+                    </select>
+                    <p class="field-help">
+                      {{ debateFilterLabel }} 이후 일정만 표시됩니다.
+                    </p>
+                    <p v-if="debateScheduleLoadError" class="field-help is-error">{{ debateScheduleLoadError }}</p>
+                  </template>
+
+                  <template v-else-if="reservationForm.scheduleMode === 'custom'">
+                    <input
+                      id="custom-purpose"
+                      class="input"
+                      v-model="reservationForm.customPurpose"
+                      placeholder="예: 스터디 모임, 연습 토론 준비"
+                      maxlength="80"
+                    />
+                    <p class="field-help">등록되지 않은 일정은 용도를 직접 입력해 예약할 수 있습니다.</p>
+                  </template>
                 </div>
               </div>
 
@@ -186,13 +212,13 @@ import {
   listReservationsByDateRange,
   type ReservationSlot,
 } from '@/lib/reservation'
+import { listDebateItems, type DebateListItem } from '@/lib/debates'
 import { useAuth } from '@/lib/auth'
 
 type WeekDay = {
   date: Date
   key: string
   weekday: string
-  month: number
   day: number
 }
 
@@ -200,10 +226,17 @@ type RangeBlock = { start: number; span: number }
 type DragPreview = RangeBlock & { date: string }
 type EventRect = RangeBlock & { lane: number; name: string; startLabel: string; endLabel: string }
 type FeedbackState = { type: 'success' | 'error'; message: string } | null
+type ScheduleMode = 'none' | 'debate' | 'custom'
+type ReservationFormState = {
+  name: string
+  scheduleMode: ScheduleMode
+  debateId: string
+  customPurpose: string
+}
 
 const weekdayNames = ['일', '월', '화', '수', '목', '금', '토']
 const timeSlots = generateTimeSlots()
-const slotHeight = 32
+const slotHeight = 24
 
 const pad = (n: number) => n.toString().padStart(2, '0')
 const formatDateKey = (date: Date): string =>
@@ -248,16 +281,44 @@ const formatDuration = (slotCount: number): string => {
   return `${minutes}분`
 }
 const currentDateKey = () => formatDateKey(new Date())
+const formatKoreanDate = (dateKey: string): string => {
+  const [year, month, day] = dateKey.split('-').map(Number)
+  if (!year || !month || !day) return dateKey
+  return `${year}년 ${month}월 ${day}일`
+}
+const buildInitialReservationForm = (): ReservationFormState => ({
+  name: '',
+  scheduleMode: 'none',
+  debateId: '',
+  customPurpose: '',
+})
 
 const weekAnchor = ref<Date>(startOfDay(new Date()))
-const reservationForm = ref<{ name: string; debateId: string }>({ name: '', debateId: '' })
+const reservationForm = ref<ReservationFormState>(buildInitialReservationForm())
 const weekScrollerRef = ref<HTMLElement | null>(null)
 const selectedSet = ref<Set<string>>(new Set())
-const debateScheduleOptions = [
-  { id: 'regular-discussion', label: '정기 토론' },
-  { id: 'special-session', label: '특별 세션' },
-  { id: 'practice-match', label: '모의 토론' },
-]
+const debateSchedules = ref<DebateListItem[]>([])
+const isLoadingDebateSchedules = ref(false)
+const debateScheduleLoadError = ref('')
+const selectedDebateId = computed(() =>
+  reservationForm.value.scheduleMode === 'debate' ? reservationForm.value.debateId || null : null,
+)
+const customPurposeTitle = computed(() =>
+  reservationForm.value.scheduleMode === 'custom' ? reservationForm.value.customPurpose.trim() : '',
+)
+
+const refreshDebateSchedules = async () => {
+  isLoadingDebateSchedules.value = true
+  debateScheduleLoadError.value = ''
+  try {
+    debateSchedules.value = await listDebateItems()
+  } catch (e: any) {
+    debateScheduleLoadError.value = e?.message || '토론 일정 목록을 불러오지 못했습니다.'
+    debateSchedules.value = []
+  } finally {
+    isLoadingDebateSchedules.value = false
+  }
+}
 
 const isMobile = ref(false)
 const isSubmitting = ref(false)
@@ -278,6 +339,9 @@ const dragStartTime = ref<string | null>(null)
 const dragCurrentTime = ref<string | null>(null)
 let baseSetDuringDrag = new Set<string>()
 let suppressClickSelection = false
+let isHorizontalDragging = false
+let dragScrollStartX = 0
+let dragScrollStartLeft = 0
 
 const { isLoggedIn, userName } = useAuth()
 const fillNameFromAuth = () => {
@@ -301,29 +365,38 @@ const weekDays = computed<WeekDay[]>(() => {
       date,
       key: formatDateKey(date),
       weekday: weekdayNames[date.getDay()],
-      month: date.getMonth() + 1,
       day: date.getDate(),
     }
   })
 })
 
 const weekDateKeys = computed(() => weekDays.value.map((day) => day.key))
-const weekRangeLabel = computed(() => {
-  const first = weekDays.value[0]?.date
-  const last = weekDays.value[weekDays.value.length - 1]?.date
-  if (!first || !last) return ''
-
-  const sameYear = first.getFullYear() === last.getFullYear()
-  const sameMonth = first.getMonth() === last.getMonth()
-
-  if (sameYear && sameMonth) {
-    return `${first.getFullYear()}년 ${first.getMonth() + 1}월 ${first.getDate()}일 - ${last.getDate()}일`
-  }
-  if (sameYear) {
-    return `${first.getFullYear()}년 ${first.getMonth() + 1}월 ${first.getDate()}일 - ${last.getMonth() + 1}월 ${last.getDate()}일`
-  }
-  return `${first.getFullYear()}년 ${first.getMonth() + 1}월 ${first.getDate()}일 - ${last.getFullYear()}년 ${last.getMonth() + 1}월 ${last.getDate()}일`
+const currentMonthLabel = computed(() => {
+  const anchor = weekAnchor.value
+  return `${anchor.getFullYear()}년 ${anchor.getMonth() + 1}월`
 })
+const selectedStartSlot = computed<{ dateKey: string; time: string } | null>(() => {
+  let earliest: { dateKey: string; time: string } | null = null
+  selectedSet.value.forEach((key) => {
+    const parsed = parseSlotKey(key)
+    if (
+      !earliest ||
+      parsed.dateKey < earliest.dateKey ||
+      (parsed.dateKey === earliest.dateKey && parsed.time < earliest.time)
+    ) {
+      earliest = parsed
+    }
+  })
+  return earliest
+})
+const debateFilterDateKey = computed(() => selectedStartSlot.value?.dateKey ?? currentDateKey())
+const filteredDebateSchedules = computed(() =>
+  debateSchedules.value.filter((debate) => debate.date >= debateFilterDateKey.value),
+)
+const debateFilterLabel = computed(() => formatKoreanDate(debateFilterDateKey.value))
+const formatDebateScheduleLabel = (debate: DebateListItem) => {
+  return `${formatKoreanDate(debate.date)} · ${debate.topic}`
+}
 
 const periodStepDays = computed(() => (isMobile.value ? 2 : 7))
 
@@ -422,7 +495,41 @@ const onSlotClick = (dateKey: string, time: string) => {
   selectedSet.value = next
 }
 
+const onWeekScrollerMouseDown = (e: MouseEvent) => {
+  if (isMobile.value || e.button !== 0) return
+
+  const target = e.target as HTMLElement | null
+  if (!target) return
+  const allowDragSource = target.closest('.day-head, .corner-head, .time-slot-label, .time-column')
+  if (!allowDragSource) return
+
+  const scroller = weekScrollerRef.value
+  if (!scroller) return
+
+  isHorizontalDragging = true
+  dragScrollStartX = e.clientX
+  dragScrollStartLeft = scroller.scrollLeft
+  scroller.classList.add('is-drag-scrolling')
+  e.preventDefault()
+}
+
+const handleMouseMove = (e: MouseEvent) => {
+  if (!isHorizontalDragging) return
+  const scroller = weekScrollerRef.value
+  if (!scroller) return
+  const deltaX = e.clientX - dragScrollStartX
+  scroller.scrollLeft = dragScrollStartLeft - deltaX
+}
+
+const clearHorizontalDragState = () => {
+  if (!isHorizontalDragging) return
+  isHorizontalDragging = false
+  weekScrollerRef.value?.classList.remove('is-drag-scrolling')
+}
+
 const handleMouseUp = () => {
+  clearHorizontalDragState()
+
   if (!isDragging.value || !dragDateKey.value || !dragStartTime.value || !dragCurrentTime.value) {
     clearDragState()
     return
@@ -603,7 +710,10 @@ const actionLabel = computed(() => {
   return `${selectedDurationLabel.value} 예약 확정`
 })
 const isSubmitDisabled = computed(() => {
-  return !reservationForm.value.name || selectedCount.value === 0 || isSubmitting.value
+  if (!reservationForm.value.name || selectedCount.value === 0 || isSubmitting.value) return true
+  if (reservationForm.value.scheduleMode === 'debate' && !reservationForm.value.debateId) return true
+  if (reservationForm.value.scheduleMode === 'custom' && !customPurposeTitle.value) return true
+  return false
 })
 
 const selectionBlockStyle = (block: RangeBlock) => ({
@@ -665,6 +775,14 @@ const handleReservation = async () => {
     submitFeedback.value = { type: 'error', message: '예약자 이름과 시간을 모두 선택해주세요.' }
     return
   }
+  if (reservationForm.value.scheduleMode === 'debate' && !reservationForm.value.debateId) {
+    submitFeedback.value = { type: 'error', message: '연결할 토론 일정을 선택해주세요.' }
+    return
+  }
+  if (reservationForm.value.scheduleMode === 'custom' && !customPurposeTitle.value) {
+    submitFeedback.value = { type: 'error', message: '예약 용도를 입력해주세요.' }
+    return
+  }
 
   const grouped = new Map<string, string[]>()
   selectedSet.value.forEach((key) => {
@@ -684,13 +802,17 @@ const handleReservation = async () => {
           dateKey,
           reservationForm.value.name,
           times.sort((a, b) => toIndex(a) - toIndex(b)),
-          reservationForm.value.debateId,
+          selectedDebateId.value,
+          customPurposeTitle.value || null,
         ),
       ),
     )
 
     await refreshWeekReservations()
-    reservationForm.value = { name: isLoggedIn.value ? userName.value : '', debateId: '' }
+    reservationForm.value = {
+      ...buildInitialReservationForm(),
+      name: isLoggedIn.value ? userName.value : '',
+    }
     selectedSet.value = new Set()
     submitFeedback.value = {
       type: 'success',
@@ -707,13 +829,39 @@ const handleReservation = async () => {
 }
 
 watch(
-  [selectedCount, () => reservationForm.value.name, () => reservationForm.value.debateId],
+  [
+    selectedCount,
+    () => reservationForm.value.name,
+    () => reservationForm.value.scheduleMode,
+    () => reservationForm.value.debateId,
+    () => reservationForm.value.customPurpose,
+  ],
   () => {
     if (submitFeedback.value?.type === 'error') {
       submitFeedback.value = null
     }
   },
 )
+
+watch(
+  () => reservationForm.value.scheduleMode,
+  (mode) => {
+    if (mode !== 'debate') {
+      reservationForm.value.debateId = ''
+    }
+    if (mode !== 'custom') {
+      reservationForm.value.customPurpose = ''
+    }
+  },
+)
+
+watch(filteredDebateSchedules, (nextOptions) => {
+  if (reservationForm.value.scheduleMode !== 'debate' || !reservationForm.value.debateId) return
+  const exists = nextOptions.some((debate) => debate.id === reservationForm.value.debateId)
+  if (!exists) {
+    reservationForm.value.debateId = ''
+  }
+})
 
 watch(
   weekDateKeys,
@@ -726,13 +874,17 @@ watch(
 onMounted(() => {
   updateViewportMode()
   window.addEventListener('resize', updateViewportMode)
+  document.addEventListener('mousemove', handleMouseMove)
   document.addEventListener('mouseup', handleMouseUp)
+  void refreshDebateSchedules()
   void scrollToDefaultTime()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', updateViewportMode)
+  document.removeEventListener('mousemove', handleMouseMove)
   document.removeEventListener('mouseup', handleMouseUp)
+  clearHorizontalDragState()
   if (periodAnimationTimer !== null) {
     window.clearTimeout(periodAnimationTimer)
   }
@@ -742,14 +894,18 @@ onBeforeUnmount(() => {
 <style scoped>
 .reservation-page {
   min-height: calc(100vh - 80px);
-  background: #fff;
+  padding: 1rem 0 1.4rem;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(86, 144, 216, 0.16), transparent 38%),
+    radial-gradient(circle at 100% 100%, rgba(86, 144, 216, 0.12), transparent 34%),
+    linear-gradient(160deg, #f5f9ff 0%, #f8fcff 55%, #eef5ff 100%);
 }
 
 .layout {
   width: 100%;
   max-width: none;
   margin: 0 auto;
-  padding: 0;
+  padding: 0 20px;
 }
 
 .reservation-shell {
@@ -760,7 +916,7 @@ onBeforeUnmount(() => {
 .workspace {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 12px;
   align-items: stretch;
   min-height: calc(100vh - 80px);
 }
@@ -771,19 +927,20 @@ onBeforeUnmount(() => {
   gap: 0;
   min-width: 0;
   padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: #fff;
-  box-shadow: none;
+  border: 1px solid #d5e4f4;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 10px 26px rgba(30, 73, 119, 0.08);
+  overflow: hidden;
   width: 100%;
 }
 
 .card-panel {
   padding: 0.95rem 1rem 1rem;
-  border-radius: 0;
-  border: 0;
-  background: #fff;
-  box-shadow: none;
+  border-radius: 12px;
+  border: 1px solid #d8e6f6;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 8px 20px rgba(30, 73, 119, 0.08);
 }
 
 .schedule-head {
@@ -791,27 +948,20 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.9rem 1rem 0.8rem;
+  padding: 0.7rem 0.85rem;
   border-bottom: 1px solid #e2e8f0;
 }
 
 .schedule-title-group {
   display: flex;
-  flex-direction: column;
-  gap: 0.12rem;
+  align-items: center;
 }
 
 .schedule-range {
   margin: 0;
   color: #0f172a;
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: 700;
-}
-
-.schedule-subtitle {
-  margin: 0;
-  color: #475569;
-  font-size: 0.86rem;
 }
 
 .nav-controls {
@@ -882,8 +1032,8 @@ onBeforeUnmount(() => {
   min-height: 340px;
   height: clamp(340px, 60vh, 760px);
   border: 0;
-  border-radius: 0;
-  background: #fff;
+  border-radius: 0 0 14px 14px;
+  background: rgba(255, 255, 255, 0.92);
   user-select: none;
 }
 
@@ -934,17 +1084,17 @@ onBeforeUnmount(() => {
   position: sticky;
   top: 0;
   z-index: 20;
-  height: 58px;
+  height: 42px;
   display: flex;
-  flex-direction: column;
   justify-content: center;
-  padding: 0.55rem 0.55rem;
+  padding: 0.45rem 0.45rem;
   border-bottom: 1px solid #e7edf5;
   background: #f8fafc;
 }
 
 .corner-head {
   left: 0;
+  z-index: 40;
   align-items: flex-end;
   font-size: 0.72rem;
   color: #64748b;
@@ -954,7 +1104,6 @@ onBeforeUnmount(() => {
 
 .day-head {
   align-items: center;
-  gap: 0.1rem;
   border-right: 1px solid #eef2f7;
 }
 
@@ -966,24 +1115,20 @@ onBeforeUnmount(() => {
   background: #f8fafc;
 }
 
-.day-name {
-  font-size: 0.74rem;
-  color: #64748b;
-  font-weight: 600;
-}
-
-.day-date {
-  font-size: 0.96rem;
+.day-display {
+  font-size: 0.84rem;
   color: #0f172a;
-  font-weight: 700;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .time-column {
   position: sticky;
   left: 0;
-  z-index: 10;
+  z-index: 30;
   background: #fff;
   border-right: 1px solid #e7edf5;
+  box-shadow: 10px 0 14px -14px rgba(30, 73, 119, 0.35);
 }
 
 .time-slot-label {
@@ -1148,8 +1293,8 @@ onBeforeUnmount(() => {
   gap: 0;
   width: 100%;
   position: static;
-  border-top: 1px solid #e2e8f0;
-  background: #fff;
+  border-top: 0;
+  background: transparent;
 }
 
 .form-head {
@@ -1182,6 +1327,16 @@ onBeforeUnmount(() => {
   font-size: 0.84rem;
   color: #334155;
   font-weight: 600;
+}
+
+.field-help {
+  margin: 0.35rem 0 0;
+  font-size: 0.74rem;
+  color: #5b6e86;
+}
+
+.field-help.is-error {
+  color: #b91c1c;
 }
 
 .input,
@@ -1253,19 +1408,102 @@ onBeforeUnmount(() => {
   box-shadow: none;
 }
 
+@media (min-width: 1181px) {
+  .layout {
+    max-width: 1600px;
+    padding: 0 28px;
+  }
+
+  .workspace {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 6px 0 16px;
+  }
+
+  .schedule-panel {
+    flex: 1 1 auto;
+    max-width: min(1260px, calc(100vw - 330px));
+    border-radius: 16px;
+    box-shadow: 0 14px 32px rgba(30, 73, 119, 0.1);
+  }
+
+  .week-scroller {
+    min-height: 560px;
+    height: clamp(560px, 74vh, 980px);
+    cursor: grab;
+  }
+
+  .week-scroller.is-drag-scrolling {
+    cursor: grabbing;
+  }
+
+  .day-head,
+  .corner-head,
+  .time-slot-label {
+    cursor: inherit;
+  }
+
+  .booking-panel {
+    width: 250px;
+    min-width: 240px;
+    border-top: 0;
+    background: transparent;
+    position: sticky;
+    top: 92px;
+  }
+
+  .booking-panel .card-panel {
+    padding: 0.8rem 0.85rem 0.9rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 12px 30px rgba(30, 73, 119, 0.1);
+  }
+
+  .form-head h3 {
+    font-size: 0.94rem;
+  }
+
+  .field-group {
+    gap: 0.62rem;
+    margin-top: 0.62rem;
+  }
+
+  .label {
+    font-size: 0.8rem;
+  }
+
+  .input,
+  .select {
+    padding: 0.52rem 0.62rem;
+    font-size: 0.86rem;
+    border-radius: 7px;
+  }
+
+  .btn-primary {
+    font-size: 0.86rem;
+    padding: 0.62rem 0.75rem;
+  }
+
+  .btn-primary.wide {
+    margin-top: 0.75rem;
+  }
+}
+
 @media (max-width: 1180px) {
   .workspace {
     display: flex;
     flex-direction: column;
+    gap: 12px;
   }
 }
 
 @media (max-width: 960px) {
   .layout {
-    padding: 0;
+    padding: 0 14px;
   }
 
-  .schedule-head,
   .form-head {
     flex-direction: column;
     align-items: flex-start;
@@ -1277,13 +1515,6 @@ onBeforeUnmount(() => {
     min-width: 0;
   }
 
-  .schedule-subtitle {
-    font-size: 0.78rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
   .nav-controls {
     width: auto;
     justify-content: flex-start;
@@ -1293,22 +1524,21 @@ onBeforeUnmount(() => {
 
 @media (max-width: 768px) {
   .layout {
-    padding: 0;
+    padding: 0 10px;
   }
 
-  .schedule-panel,
+  .schedule-panel {
+    border-radius: 12px;
+  }
+
   .card-panel {
-    border-radius: 0;
+    border-radius: 12px;
     padding: 0.85rem 0.8rem;
   }
 
   .schedule-range {
-    font-size: 1.02rem;
+    font-size: 0.96rem;
     white-space: nowrap;
-  }
-
-  .schedule-subtitle {
-    font-size: 0.74rem;
   }
 
   .form-head h3 {
@@ -1319,7 +1549,7 @@ onBeforeUnmount(() => {
   .week-scroller {
     min-height: 300px;
     height: 56vh;
-    border-radius: 0;
+    border-radius: 0 0 12px 12px;
   }
 
   .week-grid {
@@ -1328,20 +1558,11 @@ onBeforeUnmount(() => {
 
   .corner-head,
   .day-head {
-    height: 56px;
+    height: 38px;
   }
 
-  .day-name,
-  .day-date {
-    white-space: nowrap;
-  }
-
-  .day-name {
-    font-size: 0.66rem;
-  }
-
-  .day-date {
-    font-size: 0.84rem;
+  .day-display {
+    font-size: 0.74rem;
   }
 
   .time-slot-label {

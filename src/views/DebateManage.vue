@@ -46,6 +46,16 @@
             </label>
           </div>
 
+          <label>
+            <span>영상 URL (선택)</span>
+            <input
+              v-model="form.videoUrl"
+              type="text"
+              placeholder="https://www.youtube.com/watch?v=..."
+              autocomplete="off"
+            />
+          </label>
+
           <div class="participant-editor">
             <div class="participant-head">
               <strong>토론 참가자</strong>
@@ -252,6 +262,7 @@ const buildEmptyForm = () => ({
   topic: '',
   date: '',
   debateType: '자유토론' as DebateType,
+  videoUrl: '',
   participantsBySide: {
     pro: [],
     con: [],
@@ -468,6 +479,7 @@ const fillForm = (debate: DebateAdminItem) => {
     topic: debate.topic,
     date: debate.date,
     debateType: debate.debateType,
+    videoUrl: debate.videoUrl ?? '',
     participantsBySide: {
       pro: nextPro,
       con: nextCon,
@@ -556,6 +568,7 @@ const submitForm = async () => {
         con: serializeParticipants(form.value.participantsBySide.con),
       },
       notes: form.value.notes,
+      videoUrl: form.value.videoUrl,
     }
 
     if (editingId.value) {

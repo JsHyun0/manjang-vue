@@ -117,18 +117,38 @@
                 </div>
               </div>
             </div>
-            <div v-if="isAdmin" class="card-actions">
-              <button type="button" class="card-action-btn ghost" @click="goToEditPage(debate.id)">
-                수정
-              </button>
-              <button
-                type="button"
-                class="card-action-btn danger"
-                :disabled="deletingId === debate.id"
-                @click="removeDebate(debate.id)"
+            <div v-if="debate.videoUrl || isAdmin" class="card-footer">
+              <a
+                v-if="debate.videoUrl"
+                class="video-link-btn"
+                :href="debate.videoUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="토론 영상 열기"
+                aria-label="토론 영상 열기"
               >
-                {{ deletingId === debate.id ? '삭제 중...' : '삭제' }}
-              </button>
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M14 3h7v7" />
+                  <path d="M10 14 21 3" />
+                  <path d="M21 14v5a2 2 0 0 1-2 2h-5" />
+                  <path d="M10 3H5a2 2 0 0 0-2 2v5" />
+                  <path d="M3 21 14 10" />
+                </svg>
+              </a>
+
+              <div v-if="isAdmin" class="card-actions">
+                <button type="button" class="card-action-btn ghost" @click="goToEditPage(debate.id)">
+                  수정
+                </button>
+                <button
+                  type="button"
+                  class="card-action-btn danger"
+                  :disabled="deletingId === debate.id"
+                  @click="removeDebate(debate.id)"
+                >
+                  {{ deletingId === debate.id ? '삭제 중...' : '삭제' }}
+                </button>
+              </div>
             </div>
           </article>
         </div>
@@ -184,18 +204,38 @@
                 </div>
               </div>
             </div>
-            <div v-if="isAdmin" class="card-actions">
-              <button type="button" class="card-action-btn ghost" @click="goToEditPage(debate.id)">
-                수정
-              </button>
-              <button
-                type="button"
-                class="card-action-btn danger"
-                :disabled="deletingId === debate.id"
-                @click="removeDebate(debate.id)"
+            <div v-if="debate.videoUrl || isAdmin" class="card-footer">
+              <a
+                v-if="debate.videoUrl"
+                class="video-link-btn"
+                :href="debate.videoUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="토론 영상 열기"
+                aria-label="토론 영상 열기"
               >
-                {{ deletingId === debate.id ? '삭제 중...' : '삭제' }}
-              </button>
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M14 3h7v7" />
+                  <path d="M10 14 21 3" />
+                  <path d="M21 14v5a2 2 0 0 1-2 2h-5" />
+                  <path d="M10 3H5a2 2 0 0 0-2 2v5" />
+                  <path d="M3 21 14 10" />
+                </svg>
+              </a>
+
+              <div v-if="isAdmin" class="card-actions">
+                <button type="button" class="card-action-btn ghost" @click="goToEditPage(debate.id)">
+                  수정
+                </button>
+                <button
+                  type="button"
+                  class="card-action-btn danger"
+                  :disabled="deletingId === debate.id"
+                  @click="removeDebate(debate.id)"
+                >
+                  {{ deletingId === debate.id ? '삭제 중...' : '삭제' }}
+                </button>
+              </div>
             </div>
           </article>
         </div>
@@ -255,18 +295,38 @@
                 </div>
               </div>
             </div>
-            <div v-if="isAdmin" class="card-actions">
-              <button type="button" class="card-action-btn ghost" @click="goToEditPage(debate.id)">
-                수정
-              </button>
-              <button
-                type="button"
-                class="card-action-btn danger"
-                :disabled="deletingId === debate.id"
-                @click="removeDebate(debate.id)"
+            <div v-if="debate.videoUrl || isAdmin" class="card-footer">
+              <a
+                v-if="debate.videoUrl"
+                class="video-link-btn"
+                :href="debate.videoUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="토론 영상 열기"
+                aria-label="토론 영상 열기"
               >
-                {{ deletingId === debate.id ? '삭제 중...' : '삭제' }}
-              </button>
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M14 3h7v7" />
+                  <path d="M10 14 21 3" />
+                  <path d="M21 14v5a2 2 0 0 1-2 2h-5" />
+                  <path d="M10 3H5a2 2 0 0 0-2 2v5" />
+                  <path d="M3 21 14 10" />
+                </svg>
+              </a>
+
+              <div v-if="isAdmin" class="card-actions">
+                <button type="button" class="card-action-btn ghost" @click="goToEditPage(debate.id)">
+                  수정
+                </button>
+                <button
+                  type="button"
+                  class="card-action-btn danger"
+                  :disabled="deletingId === debate.id"
+                  @click="removeDebate(debate.id)"
+                >
+                  {{ deletingId === debate.id ? '삭제 중...' : '삭제' }}
+                </button>
+              </div>
             </div>
           </article>
         </div>
@@ -760,12 +820,46 @@ const debateTypeClass = (debateType: DebateListItem['debateType']): 'free' | 'ss
   border: 1px solid #f0c9c9;
 }
 
-.card-actions {
-  margin-top: 0.25rem;
+.card-footer {
+  margin-top: auto;
   padding-top: 0.65rem;
   border-top: 1px solid #e2ecf9;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+}
+
+.video-link-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid #c7dbf3;
+  background: #f5faff;
+  color: #2f5b89;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.video-link-btn:hover {
+  background: #edf5ff;
+}
+
+.video-link-btn svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.card-actions {
+  display: flex;
+  margin-left: auto;
   gap: 0.45rem;
 }
 

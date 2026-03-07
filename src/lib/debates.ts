@@ -34,6 +34,7 @@ export type DebateListItem = {
   participantsBySide: DebateParticipantsBySide<string>
   date: string // YYYY-MM-DD
   debateType: DebateType
+  videoUrl: string
 }
 
 export type DebateAdminItem = DebateListItem & {
@@ -47,6 +48,7 @@ export type DebateUpsertInput = {
   debateType: DebateType
   participantsBySide: DebateParticipantsBySide<DebateParticipantInput>
   notes?: string
+  videoUrl?: string
 }
 
 export type MemberSearchCandidate = {
@@ -93,6 +95,7 @@ type LegacyMeta = {
   participants?: string[]
   participantsBySide?: Partial<Record<DebateSide, string[]>>
   participantEntries?: LegacyParticipantEntry[]
+  videoUrl?: string
 }
 
 const LEGACY_META_PREFIX = '@manjang_meta:'
@@ -139,6 +142,21 @@ const toDebateType = (value: string): DebateType => {
   const raw = value.trim().toLowerCase()
   if (raw.includes('ssu')) return 'SSU토론'
   return '자유토론'
+}
+
+const normalizeVideoUrl = (rawValue: string | null | undefined): string => {
+  const value = (rawValue ?? '').trim()
+  if (!value) return ''
+
+  const candidate = /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(value) ? value : `https://${value}`
+
+  try {
+    const parsed = new URL(candidate)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return ''
+    return parsed.toString()
+  } catch (_error) {
+    return ''
+  }
 }
 
 const buildMetaLine = (meta: LegacyMeta): string => `${LEGACY_META_PREFIX}${JSON.stringify(meta)}`
@@ -481,6 +499,7 @@ const buildEntriesFromRow = (
 const toLegacyMetaFromEntries = (
   debateType: DebateType,
   entries: DebateParticipantEntry[],
+  videoUrl: string,
 ): LegacyMeta => {
   const participantsBySide = entriesToBySideNames(entries)
   return {
@@ -492,6 +511,7 @@ const toLegacyMetaFromEntries = (
       name: entry.name,
       userId: entry.userId,
     })),
+    videoUrl: videoUrl || undefined,
   }
 }
 
@@ -565,6 +585,7 @@ const mapDebates = async (rows: DebateRow[]): Promise<DebateAdminItem[]> => {
       topic: row.topic_text,
       date: row.debate_date,
       debateType: inferDebateType(row, meta),
+      videoUrl: normalizeVideoUrl(meta.videoUrl),
       participants: flattenBySideNames(participantsBySide),
       participantsBySide,
       participantEntries,
@@ -596,11 +617,12 @@ const buildDebatePayload = async (
   debateType: DebateType,
   entries: DebateParticipantEntry[],
   notes: string,
+  videoUrl: string,
 ): Promise<Record<string, any>> => {
   const hasExtended = await detectExtendedColumns()
   const participantsBySide = entriesToBySideNames(entries)
   const flattened = flattenBySideNames(participantsBySide)
-  const storedNotes = buildStoredNotes(notes, toLegacyMetaFromEntries(debateType, entries))
+  const storedNotes = buildStoredNotes(notes, toLegacyMetaFromEntries(debateType, entries, videoUrl))
 
   if (hasExtended) {
     return {
@@ -623,11 +645,14 @@ export const createDebateItem = async (input: DebateUpsertInput): Promise<void> 
   const topic = input.topic.trim()
   const date = input.date.trim()
   const notes = (input.notes ?? '').trim()
+  const rawVideoUrl = (input.videoUrl ?? '').trim()
+  const videoUrl = normalizeVideoUrl(rawVideoUrl)
   if (!topic) throw new Error('논제를 입력해주세요.')
   if (!date) throw new Error('날짜를 입력해주세요.')
+  if (rawVideoUrl && !videoUrl) throw new Error('영상 URL 형식이 올바르지 않습니다.')
 
   const entries = normalizeUpsertEntries(input)
-  const payload = await buildDebatePayload(topic, date, input.debateType, entries, notes)
+  const payload = await buildDebatePayload(topic, date, input.debateType, entries, notes, videoUrl)
 
   const { data, error } = await supabase.from('debates').insert(payload).select('id').single()
   if (error) throw new Error(error.message || '토론 생성에 실패했습니다.')
@@ -642,11 +667,14 @@ export const updateDebateItem = async (id: string, input: DebateUpsertInput): Pr
   const topic = input.topic.trim()
   const date = input.date.trim()
   const notes = (input.notes ?? '').trim()
+  const rawVideoUrl = (input.videoUrl ?? '').trim()
+  const videoUrl = normalizeVideoUrl(rawVideoUrl)
   if (!topic) throw new Error('논제를 입력해주세요.')
   if (!date) throw new Error('날짜를 입력해주세요.')
+  if (rawVideoUrl && !videoUrl) throw new Error('영상 URL 형식이 올바르지 않습니다.')
 
   const entries = normalizeUpsertEntries(input)
-  const payload = await buildDebatePayload(topic, date, input.debateType, entries, notes)
+  const payload = await buildDebatePayload(topic, date, input.debateType, entries, notes, videoUrl)
 
   const { error } = await supabase.from('debates').update(payload).eq('id', id)
   if (error) throw new Error(error.message || '토론 수정에 실패했습니다.')

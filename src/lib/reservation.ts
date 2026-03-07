@@ -163,14 +163,16 @@ export const createReservations = async (
   name: string,
   times: string[],
   debateId?: string | null,
+  title?: string | null,
 ): Promise<void> => {
+  const normalizedTitle = title?.trim() || null
   const groups = groupContiguous(times)
   for (const group of groups) {
     const start = group[0]
     const end = nextSlot(group[group.length - 1])
     const payload = {
       reserved_by_name: name,
-      title: null,
+      title: normalizedTitle,
       starts_at: toIsoAt(date, start),
       ends_at: toIsoAt(date, end),
       debate_id: debateId || null,
