@@ -39,6 +39,12 @@ const getAuthRedirectUrl = (path: '/login' | '/reset-password'): string => {
   return `${base}${path}`
 }
 
+const isExistingEmailSignUpResponse = (user: User | null, hasSession: boolean): boolean => {
+  if (hasSession || !user || !Array.isArray(user.identities)) return false
+  // Supabase may return an obfuscated user with empty identities when the email already exists.
+  return user.identities.length === 0
+}
+
 const normalizeRole = (value: string | null | undefined): AuthRole => {
   return value === 'admin' ? 'admin' : 'member'
 }
@@ -168,9 +174,18 @@ export async function signUpWithEmail(
     options,
   })
   if (error) throw error
-  userRef.value = await toMappedUser(data.user ?? null)
+
+  const hasSession = !!data.session
+  if (isExistingEmailSignUpResponse(data.user ?? null, hasSession)) {
+    throw new Error('이미 가입된 이메일입니다. 로그인으로 진행해주세요.')
+  }
+  if (!data.user && !hasSession) {
+    throw new Error('회원가입 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
+  }
+
+  userRef.value = hasSession ? await toMappedUser(data.user ?? null) : null
   readyRef.value = true
-  return !data.session
+  return !hasSession
 }
 
 export async function signInWithEmail(email: string, password: string): Promise<void> {
