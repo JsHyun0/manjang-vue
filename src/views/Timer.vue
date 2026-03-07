@@ -4,13 +4,8 @@
       <!-- 모드 선택 화면 -->
       <div v-if="stage === 'select'" class="mode-select">
         <div class="stage-title-wrap">
-          <p class="stage-kicker">Timer Studio</p>
-          <h2 class="select-title">타이머를 선택하세요</h2>
-          <p class="select-subtitle">
-            16:9 화면 발표 환경에 최적화된 토론 타이머입니다.
-            <br />
-            토론 유형을 선택하면 단계별 시간을 세부 조정할 수 있습니다.
-          </p>
+          <p class="stage-kicker">Debate Timer</p>
+          <h2 class="select-title">토론 종류를 선택하세요</h2>
         </div>
         <div class="mode-card-grid">
           <button class="mode-card free" @click="handleSelectMode('free')">
@@ -18,24 +13,15 @@
               <div class="mode-card-title">자유토론</div>
               <span class="mode-chip">CEDA</span>
             </div>
-            <div class="mode-card-desc">주요 발언 후 자유 토론 단계에서 듀얼 타이머를 사용합니다.</div>
-            <ul class="mode-features">
-              <li>단계별 시간 커스텀</li>
-              <li>자유토론 듀얼 전환</li>
-              <li>대회형 진행에 적합</li>
-            </ul>
+            <div class="mode-card-desc">교차조사가 추가된 자유 발언이 진행되는 기본 토론 형식</div>
           </button>
           <button class="mode-card ssu" @click="handleSelectMode('ssu')">
             <div class="mode-card-head">
               <div class="mode-card-title">SSU토론</div>
               <span class="mode-chip">SSU</span>
             </div>
-            <div class="mode-card-desc">10단계 진행형 구조와 발언자/작전타임 카운터를 제공합니다.</div>
-            <ul class="mode-features">
-              <li>발언자 하이라이트</li>
-              <li>보충질의/작전타임</li>
-              <li>대규모 발표에 최적화</li>
-            </ul>
+            <div class="mode-card-desc">교차조사와 보충질의가 포함된 숭실대의 아카데믹 토론 형식</div>
+  
           </button>
         </div>
       </div>
@@ -63,6 +49,58 @@
             placeholder="논제를 입력하세요"
           />
         </div>
+
+        <section class="schedule-import-card">
+          <div class="schedule-import-head">
+            <h3>토론 일정 불러오기</h3>
+            <p>선택한 날짜의 등록된 토론에서 논제/토론자 정보를 가져옵니다.</p>
+          </div>
+
+          <div class="schedule-import-controls">
+            <label class="schedule-field">
+              <span>날짜</span>
+              <input
+                class="schedule-input"
+                type="date"
+                v-model="scheduleLoadDate"
+                :disabled="isLoadingDebateSchedules"
+              />
+            </label>
+
+            <label class="schedule-field grow">
+              <span>토론 일정</span>
+              <select class="schedule-select" v-model="selectedScheduleId" :disabled="isLoadingDebateSchedules">
+                <option value="">
+                  {{
+                    isLoadingDebateSchedules
+                      ? '토론 일정 불러오는 중...'
+                      : schedulesOnDate.length > 0
+                        ? '일정을 선택하세요'
+                        : '선택한 날짜에 등록된 일정이 없습니다'
+                  }}
+                </option>
+                <option v-for="debate in schedulesOnDate" :key="debate.id" :value="debate.id">
+                  {{ formatScheduleOption(debate) }}
+                </option>
+              </select>
+            </label>
+
+            <button
+              type="button"
+              class="control-btn edit schedule-apply-btn"
+              @click="applyScheduleFromDebate"
+              :disabled="!selectedScheduleId"
+            >
+              불러오기
+            </button>
+          </div>
+
+          <p class="schedule-import-note">
+            불러온 뒤에도 논제/토론자 입력값은 자유롭게 수정할 수 있습니다.
+          </p>
+          <p v-if="scheduleImportMessage" class="schedule-import-note strong">{{ scheduleImportMessage }}</p>
+          <p v-if="debateScheduleLoadError" class="schedule-import-error">{{ debateScheduleLoadError }}</p>
+        </section>
 
         <TimerSettings :phases="preparePhases" @update-phase="updatePhaseDuration" />
 
@@ -375,6 +413,15 @@
             </div>
           </div>
         </div>
+        <div v-if="isFreeMode && isDualPhase" class="dual-step-actions">
+          <button
+            class="control-btn step-btn"
+            @click="nextStep"
+            :disabled="currentStep === activeSteps.length - 1"
+          >
+            다음 단계 →
+          </button>
+        </div>
 
         <!-- 시간 수정 팝업 -->
         <div v-if="showAdjustModal" class="adjust-modal-backdrop" @click="closeAdjustModal">
@@ -464,6 +511,7 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSSUTimer, defaultCEDASteps } from '@/lib/timer'
+import { listDebateItems, type DebateListItem } from '@/lib/debates'
 import TimerSettings from '@/components/TimerSettings.vue'
 
 // 타이머 훅 사용
@@ -541,12 +589,65 @@ const prepareStepGroups = ref<string[]>([])
 // 논제 입력
 const debateTopic = ref<string>('')
 
+const pad2 = (n: number) => String(n).padStart(2, '0')
+const toLocalDateKey = (date: Date) =>
+  `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+
+const scheduleLoadDate = ref<string>(toLocalDateKey(new Date()))
+const selectedScheduleId = ref<string>('')
+const scheduleImportMessage = ref<string>('')
+const debateSchedulePool = ref<DebateListItem[]>([])
+const isLoadingDebateSchedules = ref(false)
+const debateScheduleLoadError = ref('')
+const schedulesOnDate = computed(() =>
+  debateSchedulePool.value.filter((debate) => debate.date === scheduleLoadDate.value),
+)
+const selectedSchedule = computed(
+  () => schedulesOnDate.value.find((debate) => debate.id === selectedScheduleId.value) ?? null,
+)
+const formatScheduleOption = (debate: DebateListItem): string =>
+  `${debate.topic} · 찬성 ${debate.participantsBySide.pro.length}명 / 반대 ${debate.participantsBySide.con.length}명`
+
+const loadDebateSchedulePool = async () => {
+  isLoadingDebateSchedules.value = true
+  debateScheduleLoadError.value = ''
+  try {
+    debateSchedulePool.value = await listDebateItems()
+  } catch (e: any) {
+    debateSchedulePool.value = []
+    debateScheduleLoadError.value = e?.message || '토론 일정을 불러오지 못했습니다.'
+  } finally {
+    isLoadingDebateSchedules.value = false
+  }
+}
+
 // 토론자 입력 옵션 및 이름 상태 (기본 비활성)
 const enableDebaterInput = ref<boolean>(false)
 const debaterNames = reactive<{ positive: string[]; negative: string[] }>({
   positive: ['', '', ''],
   negative: ['', '', ''],
 })
+
+const fillDebaterSideNames = (side: 'positive' | 'negative', names: string[]) => {
+  for (let i = 0; i < 3; i++) {
+    debaterNames[side][i] = names[i] ?? ''
+  }
+}
+
+const applyScheduleFromDebate = () => {
+  const picked = selectedSchedule.value
+  if (!picked) return
+  debateTopic.value = picked.topic
+
+  if (selectedMode.value === 'ssu') {
+    enableDebaterInput.value = true
+    fillDebaterSideNames('positive', picked.participantsBySide.pro)
+    fillDebaterSideNames('negative', picked.participantsBySide.con)
+    scheduleImportMessage.value = '논제와 토론자 정보를 불러왔습니다. 필요한 경우 수정하세요.'
+  } else {
+    scheduleImportMessage.value = '논제를 불러왔습니다. 필요한 경우 수정하세요.'
+  }
+}
 
 function getDebaterLabel(side: 'positive' | 'negative', index1Based: number): string {
   const arr = debaterNames[side]
@@ -611,6 +712,8 @@ const adjustDualTime = (deltaSeconds: number) => {
 
 const handleSelectMode = (mode: 'free' | 'ssu') => {
   selectedMode.value = mode
+  scheduleImportMessage.value = ''
+  selectedScheduleId.value = ''
   const sourceSteps =
     mode === 'free'
       ? defaultCEDASteps.map((s) => ({ title: s.title, duration: s.duration }))
@@ -633,6 +736,7 @@ const handleSelectMode = (mode: 'free' | 'ssu') => {
   preparePhases.value = grouped
   prepareStepGroups.value = groupsPerStep
   stage.value = 'prepare'
+  void loadDebateSchedulePool()
 }
 
 const updatePhaseDuration = (index: number, durationSeconds: number) => {
@@ -666,6 +770,7 @@ const startDebate = () => {
 
 const backToSelection = () => {
   selectedMode.value = null
+  scheduleImportMessage.value = ''
   stage.value = 'select'
   returnToSelection()
 }
@@ -753,6 +858,21 @@ watch(
   () => handleResetFromQuery(),
   { immediate: true },
 )
+
+watch(
+  () => scheduleLoadDate.value,
+  () => {
+    selectedScheduleId.value = ''
+    scheduleImportMessage.value = ''
+  },
+)
+
+watch(schedulesOnDate, (next) => {
+  if (!selectedScheduleId.value) return
+  if (!next.some((debate) => debate.id === selectedScheduleId.value)) {
+    selectedScheduleId.value = ''
+  }
+})
 </script>
 
 <style scoped>
@@ -833,7 +953,9 @@ watch(
 
 .mode-card-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  grid-template-columns: 1fr;
+  width: min(100%, 720px);
+  margin: 0 auto;
   gap: clamp(0.8rem, 2vw, 1.3rem);
 }
 
@@ -992,6 +1114,92 @@ watch(
   outline: none;
   border-color: #74a3da;
   box-shadow: 0 0 0 3px rgba(79, 140, 211, 0.18);
+}
+
+.schedule-import-card {
+  margin: 0.65rem 0 0.8rem;
+  border: 1px solid #d2e2f6;
+  border-radius: 14px;
+  background: #f8fbff;
+  padding: 0.85rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.schedule-import-head h3 {
+  margin: 0;
+  color: #234f7d;
+  font-size: 0.98rem;
+}
+
+.schedule-import-head p {
+  margin: 0.3rem 0 0;
+  color: #4d6a8a;
+  font-size: 0.83rem;
+}
+
+.schedule-import-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.schedule-field {
+  display: grid;
+  gap: 0.32rem;
+}
+
+.schedule-field.grow {
+  flex: 1;
+  min-width: min(100%, 340px);
+}
+
+.schedule-field span {
+  color: #365a82;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.schedule-input,
+.schedule-select {
+  height: 40px;
+  border: 1px solid #cadcf4;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0 0.62rem;
+  font-size: 0.88rem;
+  color: #173a60;
+}
+
+.schedule-input:focus,
+.schedule-select:focus {
+  outline: none;
+  border-color: #74a3da;
+  box-shadow: 0 0 0 3px rgba(79, 140, 211, 0.16);
+}
+
+.schedule-apply-btn {
+  height: 40px;
+  min-width: 96px;
+}
+
+.schedule-import-note {
+  margin: 0;
+  color: #5a7593;
+  font-size: 0.78rem;
+}
+
+.schedule-import-note.strong {
+  color: #1d5b98;
+  font-weight: 700;
+}
+
+.schedule-import-error {
+  margin: 0;
+  color: #b42323;
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .debater-input-option {
@@ -1503,6 +1711,12 @@ watch(
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: clamp(0.8rem, 1.2vw, 1.25rem);
+}
+
+.dual-step-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.7rem;
 }
 
 .rect-timer {
