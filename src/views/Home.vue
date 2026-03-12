@@ -43,11 +43,17 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import heroImage from '@/assets/logo.jpeg'
 import naverCafeLogo from '@/assets/naver_cafe.webp'
 import { useAuth } from '@/lib/auth'
+import { warmBackend } from '@/lib/backendWarmup'
 
 const { isAdmin } = useAuth()
+
+onMounted(() => {
+  void warmBackend()
+})
 </script>
 
 <style scoped>

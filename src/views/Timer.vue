@@ -1308,7 +1308,7 @@ watch(schedulesOnDate, (next) => {
 .timer-main {
   position: relative;
   width: 100%;
-  padding: 2.4rem 0.45rem 1.2rem;
+  padding: 1.2rem 0.45rem 1.2rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1318,6 +1318,9 @@ watch(schedulesOnDate, (next) => {
   --debater-width: clamp(280px, 18.5vw, 370px);
   display: grid;
   grid-template-columns: var(--debater-width) minmax(620px, 1fr) var(--debater-width);
+  grid-template-areas:
+    'topic topic topic'
+    'left center right';
   gap: clamp(0.7rem, 1.2vw, 1.4rem);
   align-items: stretch;
 }
@@ -1332,23 +1335,22 @@ watch(schedulesOnDate, (next) => {
   justify-content: flex-start;
 }
 
-.timer-main.ssu-mode .debate-topic-global {
-  left: calc(var(--debater-width) + 1rem);
-  right: calc(var(--debater-width) + 1rem);
-}
-
 .debate-topic-global {
-  position: absolute;
-  top: 0.35rem;
-  left: 0;
-  right: 0;
+  position: relative;
+  grid-area: topic;
   text-align: center;
   font-weight: 900;
-  color: #173b63;
+  color: #163b62;
   line-height: 1.24;
-  font-size: clamp(1.6rem, 2.8vw, 2.95rem);
+  font-size: clamp(1.2rem, 1.9vw, 2rem);
   letter-spacing: -0.015em;
-  padding: 0 1rem;
+  width: min(980px, 100%);
+  margin: 0 auto 0.2rem;
+  padding: 0.68rem 0.8rem;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--timer-border);
+  border-radius: 14px;
+  overflow-wrap: anywhere;
   pointer-events: none;
 }
 
@@ -1364,6 +1366,18 @@ watch(schedulesOnDate, (next) => {
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid var(--timer-border);
   border-radius: 14px;
+}
+
+.timer-main.ssu-mode .debaters-left {
+  grid-area: left;
+}
+
+.timer-main.ssu-mode .timer-display {
+  grid-area: center;
+}
+
+.timer-main.ssu-mode .debaters-right {
+  grid-area: right;
 }
 
 .debaters-left,
@@ -1881,13 +1895,12 @@ watch(schedulesOnDate, (next) => {
     display: flex;
     flex-direction: column;
     gap: 0.8rem;
-    padding-top: 1.6rem;
+    padding-top: 1.2rem;
   }
 
   .timer-main.ssu-mode .debate-topic-global {
-    position: static;
-    margin-bottom: 0.3rem;
-    padding: 0;
+    width: min(980px, 100%);
+    margin-bottom: 0.2rem;
   }
 
   .debaters-left,

@@ -90,10 +90,15 @@
                     <div class="overlay-layer">
                       <div
                         v-for="ev in eventRectsByDate[day.key] ?? []"
-                        :key="`ev-${day.key}-${ev.start}-${ev.span}-${ev.lane}-${ev.name}`"
+                        :key="`ev-${day.key}-${ev.reservationId}-${ev.start}-${ev.span}-${ev.lane}`"
                         class="event-block"
                         :title="`${ev.name} (${ev.startLabel}~${ev.endLabel})`"
                         :style="eventBlockStyle(ev)"
+                        role="button"
+                        tabindex="0"
+                        @click="openReservationDetail(day.key, ev)"
+                        @keydown.enter.prevent="openReservationDetail(day.key, ev)"
+                        @keydown.space.prevent="openReservationDetail(day.key, ev)"
                       >
                         <span class="event-name">{{ ev.name }}</span>
                         <span class="event-time">{{ ev.startLabel }}~{{ ev.endLabel }}</span>
@@ -200,6 +205,86 @@
           </aside>
         </section>
       </section>
+
+      <div
+        v-if="activeReservationDetail"
+        class="reservation-modal-backdrop"
+        @click="closeReservationDetail"
+      >
+        <section class="reservation-modal card-panel" @click.stop>
+          <div class="reservation-modal-head">
+            <h3>예약 상세</h3>
+            <button
+              type="button"
+              class="modal-close-btn"
+              :disabled="isUpdatingReservation || isDeletingReservation"
+              @click="closeReservationDetail"
+            >
+              닫기
+            </button>
+          </div>
+
+          <div class="reservation-detail-list">
+            <p><strong>날짜</strong> {{ formatKoreanDate(activeReservationDetail.dateKey) }}</p>
+            <p><strong>시간</strong> {{ activeReservationDetail.startLabel }} ~ {{ activeReservationDetail.endLabel }}</p>
+            <p><strong>예약자</strong> {{ activeReservationDetail.name }}</p>
+            <p><strong>용도</strong> {{ activeReservationDetail.title || '미입력' }}</p>
+          </div>
+
+          <template v-if="canEditActiveReservation">
+            <div class="field-group modal-edit-group">
+              <div class="field">
+                <label class="label" for="detail-reserver-name">예약자 이름</label>
+                <input
+                  id="detail-reserver-name"
+                  class="input"
+                  v-model="detailEditForm.name"
+                  :disabled="isUpdatingReservation || isDeletingReservation"
+                />
+              </div>
+
+              <div class="field">
+                <label class="label" for="detail-purpose">예약 용도</label>
+                <input
+                  id="detail-purpose"
+                  class="input"
+                  v-model="detailEditForm.title"
+                  placeholder="예: 스터디 모임, 연습 토론 준비"
+                  maxlength="80"
+                  :disabled="isUpdatingReservation || isDeletingReservation"
+                />
+              </div>
+            </div>
+
+            <div v-if="detailFeedback" class="feedback-banner" :class="`is-${detailFeedback.type}`">
+              {{ detailFeedback.message }}
+            </div>
+
+            <div class="reservation-modal-actions">
+              <button
+                type="button"
+                class="btn-secondary"
+                :disabled="isUpdatingReservation || isDeletingReservation"
+                @click="handleDeleteReservation"
+              >
+                {{ isDeletingReservation ? '삭제 중...' : '예약 삭제' }}
+              </button>
+              <button
+                type="button"
+                class="btn-primary"
+                :disabled="isUpdatingReservation || isDeletingReservation"
+                @click="handleUpdateReservation"
+              >
+                {{ isUpdatingReservation ? '저장 중...' : '수정 저장' }}
+              </button>
+            </div>
+          </template>
+
+          <p v-else class="field-help">
+            본인이 예약한 항목만 수정하거나 삭제할 수 있습니다.
+          </p>
+        </section>
+      </div>
     </main>
   </div>
 </template>
@@ -208,8 +293,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   createReservations,
+  deleteReservation,
   generateTimeSlots,
   listReservationsByDateRange,
+  updateReservation,
   type ReservationSlot,
 } from '@/lib/reservation'
 import { listDebateItems, type DebateListItem } from '@/lib/debates'
@@ -224,7 +311,24 @@ type WeekDay = {
 
 type RangeBlock = { start: number; span: number }
 type DragPreview = RangeBlock & { date: string }
-type EventRect = RangeBlock & { lane: number; name: string; startLabel: string; endLabel: string }
+type EventRect = RangeBlock & {
+  lane: number
+  reservationId: string
+  name: string
+  title: string | null
+  reservedBy: string | null
+  startLabel: string
+  endLabel: string
+}
+type ReservationDetailState = {
+  reservationId: string
+  dateKey: string
+  startLabel: string
+  endLabel: string
+  name: string
+  title: string
+  reservedBy: string | null
+}
 type FeedbackState = { type: 'success' | 'error'; message: string } | null
 type ScheduleMode = 'none' | 'debate' | 'custom'
 type ReservationFormState = {
@@ -322,16 +426,21 @@ const refreshDebateSchedules = async () => {
   }
 }
 
-const isMobile = ref(false)
+const initialIsMobile = typeof window !== 'undefined' ? window.innerWidth <= 960 : false
+const isMobile = ref(initialIsMobile)
 const isSubmitting = ref(false)
 const submitFeedback = ref<FeedbackState>(null)
 const updateViewportMode = () => {
-  isMobile.value = window.innerWidth <= 960
+  const next = window.innerWidth <= 960
+  if (isMobile.value !== next) {
+    isMobile.value = next
+  }
 }
 
 const reservationsByDate = ref<Record<string, ReservationSlot[]>>({})
 const isLoadingWeek = ref(false)
 let fetchRequestId = 0
+let fetchAbortController: AbortController | null = null
 const periodAnimationClass = ref('')
 let periodAnimationTimer: number | null = null
 
@@ -345,7 +454,13 @@ let isHorizontalDragging = false
 let dragScrollStartX = 0
 let dragScrollStartLeft = 0
 
-const { isLoggedIn, userName } = useAuth()
+const { user, isLoggedIn, userName } = useAuth()
+const currentUserId = computed(() => user.value?.id ?? null)
+const activeReservationDetail = ref<ReservationDetailState | null>(null)
+const detailEditForm = ref({ name: '', title: '' })
+const detailFeedback = ref<FeedbackState>(null)
+const isUpdatingReservation = ref(false)
+const isDeletingReservation = ref(false)
 const fillNameFromAuth = () => {
   if (isLoggedIn.value && !reservationForm.value.name) {
     reservationForm.value.name = userName.value
@@ -458,8 +573,16 @@ const clearDragState = () => {
   dragCurrentTime.value = null
 }
 
+const reservedTimeSetByDate = computed<Record<string, Set<string>>>(() => {
+  const next: Record<string, Set<string>> = {}
+  weekDateKeys.value.forEach((dateKey) => {
+    next[dateKey] = new Set((reservationsByDate.value[dateKey] ?? []).map((reservation) => reservation.timeSlot))
+  })
+  return next
+})
+
 const isReservedTime = (dateKey: string, time: string): boolean => {
-  return (reservationsByDate.value[dateKey] ?? []).some((r) => r.timeSlot === time)
+  return reservedTimeSetByDate.value[dateKey]?.has(time) ?? false
 }
 
 const isUnavailableSlot = (dateKey: string, time: string) => {
@@ -645,31 +768,53 @@ const eventRectsByDate = computed<Record<string, EventRect[]>>(() => {
   const result: Record<string, EventRect[]> = {}
 
   for (const dateKey of weekDateKeys.value) {
-    const grouped = new Map<string, { name: string; indices: number[] }>()
+    const grouped = new Map<
+      string,
+      {
+        reservationId: string
+        name: string
+        title: string | null
+        reservedBy: string | null
+        indices: number[]
+      }
+    >()
     const dayReservations = reservationsByDate.value[dateKey] ?? []
 
     for (const r of dayReservations) {
       const idx = toIndex(r.timeSlot)
       if (idx < 0) continue
-      const key = r.id && r.id !== 0 ? `id:${r.id}` : `name:${r.name}`
-      const bucket = grouped.get(key) ?? { name: r.name, indices: [] }
+      const key = r.id ? `id:${r.id}` : `name:${r.name}-${r.timeSlot}`
+      const bucket = grouped.get(key) ?? {
+        reservationId: r.id,
+        name: r.name,
+        title: r.title ?? null,
+        reservedBy: r.reservedBy ?? null,
+        indices: [],
+      }
       bucket.indices.push(idx)
       grouped.set(key, bucket)
     }
 
-    const intervals: Array<{ name: string; start: number; end: number }> = []
-    for (const { name, indices } of grouped.values()) {
+    const intervals: Array<{
+      reservationId: string
+      name: string
+      title: string | null
+      reservedBy: string | null
+      start: number
+      end: number
+    }> = []
+    for (const { reservationId, name, title, reservedBy, indices } of grouped.values()) {
       indices.sort((a, b) => a - b)
       let s = -1
       let p = -2
       for (const idx of indices) {
         if (idx !== p + 1) {
-          if (s !== -1) intervals.push({ name, start: s, end: p })
+          if (s !== -1) intervals.push({ reservationId, name, title, reservedBy, start: s, end: p })
           s = idx
         }
         p = idx
       }
-      if (s !== -1) intervals.push({ name, start: s, end: p })
+      if (s !== -1) intervals.push({ reservationId, name, title, reservedBy, start: s, end: p })
     }
 
     intervals.sort((a, b) => a.start - b.start || b.end - a.end)
@@ -693,7 +838,10 @@ const eventRectsByDate = computed<Record<string, EventRect[]>>(() => {
         start: interval.start,
         span: interval.end - interval.start + 1,
         lane,
+        reservationId: interval.reservationId,
         name: interval.name,
+        title: interval.title,
+        reservedBy: interval.reservedBy,
         startLabel,
         endLabel: addHalfHour(endBase),
       })
@@ -704,6 +852,48 @@ const eventRectsByDate = computed<Record<string, EventRect[]>>(() => {
 
   return result
 })
+
+const isOwnReservation = (reservedBy: string | null, reservationName: string): boolean => {
+  if (!isLoggedIn.value) return false
+  if (reservedBy && currentUserId.value) {
+    return reservedBy === currentUserId.value
+  }
+  return !!userName.value && reservationName === userName.value
+}
+
+const canEditActiveReservation = computed(() => {
+  const detail = activeReservationDetail.value
+  if (!detail) return false
+  return isOwnReservation(detail.reservedBy, detail.name)
+})
+
+const openReservationDetail = (dateKey: string, event: EventRect) => {
+  activeReservationDetail.value = {
+    reservationId: event.reservationId,
+    dateKey,
+    startLabel: event.startLabel,
+    endLabel: event.endLabel,
+    name: event.name,
+    title: event.title ?? '',
+    reservedBy: event.reservedBy ?? null,
+  }
+  detailEditForm.value = {
+    name: event.name,
+    title: event.title ?? '',
+  }
+  detailFeedback.value = null
+}
+
+const resetReservationDetailState = () => {
+  activeReservationDetail.value = null
+  detailEditForm.value = { name: '', title: '' }
+  detailFeedback.value = null
+}
+
+const closeReservationDetail = () => {
+  if (isUpdatingReservation.value || isDeletingReservation.value) return
+  resetReservationDetailState()
+}
 
 const selectedCount = computed(() => selectedSet.value.size)
 const selectedDurationLabel = computed(() => formatDuration(selectedCount.value))
@@ -750,10 +940,15 @@ async function scrollToDefaultTime() {
 
 const refreshWeekReservations = async () => {
   const requestId = ++fetchRequestId
+  fetchAbortController?.abort()
+  const controller = new AbortController()
+  fetchAbortController = controller
   isLoadingWeek.value = true
 
   try {
-    const byDate = await listReservationsByDateRange(weekDateKeys.value)
+    const byDate = await listReservationsByDateRange(weekDateKeys.value, {
+      signal: controller.signal,
+    })
 
     if (requestId !== fetchRequestId) return
 
@@ -765,7 +960,15 @@ const refreshWeekReservations = async () => {
     reservationsByDate.value = next
     selectedSet.value = new Set()
     await scrollToDefaultTime()
+  } catch (e: unknown) {
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      return
+    }
+    console.error('예약 목록 조회 실패:', e)
   } finally {
+    if (fetchAbortController === controller) {
+      fetchAbortController = null
+    }
     if (requestId === fetchRequestId) {
       isLoadingWeek.value = false
     }
@@ -806,6 +1009,7 @@ const handleReservation = async () => {
           times.sort((a, b) => toIndex(a) - toIndex(b)),
           selectedDebateId.value,
           customPurposeTitle.value || null,
+          currentUserId.value,
         ),
       ),
     )
@@ -827,6 +1031,66 @@ const handleReservation = async () => {
     }
   } finally {
     isSubmitting.value = false
+  }
+}
+
+const handleUpdateReservation = async () => {
+  const detail = activeReservationDetail.value
+  if (!detail || !canEditActiveReservation.value) return
+
+  const nextName = detailEditForm.value.name.trim()
+  const nextTitle = detailEditForm.value.title.trim()
+  if (!nextName) {
+    detailFeedback.value = { type: 'error', message: '예약자 이름을 입력해주세요.' }
+    return
+  }
+
+  isUpdatingReservation.value = true
+  detailFeedback.value = null
+  try {
+    await updateReservation(detail.reservationId, {
+      reservedByName: nextName,
+      title: nextTitle || null,
+    })
+    await refreshWeekReservations()
+    activeReservationDetail.value = {
+      ...detail,
+      name: nextName,
+      title: nextTitle,
+    }
+    detailEditForm.value = { name: nextName, title: nextTitle }
+    detailFeedback.value = { type: 'success', message: '예약 정보를 수정했습니다.' }
+  } catch (e: any) {
+    detailFeedback.value = {
+      type: 'error',
+      message: e?.message || '예약 수정 중 오류가 발생했습니다.',
+    }
+  } finally {
+    isUpdatingReservation.value = false
+  }
+}
+
+const handleDeleteReservation = async () => {
+  const detail = activeReservationDetail.value
+  if (!detail || !canEditActiveReservation.value) return
+
+  const ok = window.confirm('이 예약을 삭제하시겠습니까?')
+  if (!ok) return
+
+  isDeletingReservation.value = true
+  detailFeedback.value = null
+  try {
+    await deleteReservation(detail.reservationId)
+    await refreshWeekReservations()
+    resetReservationDetailState()
+    submitFeedback.value = { type: 'success', message: '예약을 삭제했습니다.' }
+  } catch (e: any) {
+    detailFeedback.value = {
+      type: 'error',
+      message: e?.message || '예약 삭제 중 오류가 발생했습니다.',
+    }
+  } finally {
+    isDeletingReservation.value = false
   }
 }
 
@@ -885,6 +1149,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  fetchAbortController?.abort()
+  fetchAbortController = null
   window.removeEventListener('resize', updateViewportMode)
   document.removeEventListener('mousemove', handleMouseMove)
   document.removeEventListener('mouseup', handleMouseUp)
@@ -1244,6 +1510,23 @@ onBeforeUnmount(() => {
   padding: 5px 7px;
   overflow: hidden;
   box-shadow: none;
+  pointer-events: auto;
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.event-block:hover {
+  border-color: #94a3b8;
+  box-shadow: 0 4px 12px rgba(30, 41, 59, 0.14);
+  transform: translateY(-1px);
+}
+
+.event-block:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.75);
+  outline-offset: 1px;
 }
 
 .event-name {
@@ -1395,6 +1678,25 @@ onBeforeUnmount(() => {
   transition: background-color 0.12s ease;
 }
 
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.72rem 0.9rem;
+  border-radius: 8px;
+  border: 1px solid #e11d48;
+  background: #fff;
+  color: #be123c;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.92rem;
+  transition: background-color 0.12s ease;
+}
+
+.btn-secondary:hover {
+  background: rgba(225, 29, 72, 0.08);
+}
+
 .btn-primary:hover {
   background: #1d4ed8;
 }
@@ -1405,11 +1707,85 @@ onBeforeUnmount(() => {
 }
 
 .btn-primary:disabled,
+.btn-secondary:disabled,
 .today-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+}
+
+.reservation-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.reservation-modal {
+  width: min(460px, 100%);
+  max-height: calc(100vh - 60px);
+  overflow-y: auto;
+  background: #fff;
+}
+
+.reservation-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.reservation-modal-head h3 {
+  margin: 0;
+  font-size: 1.06rem;
+  color: #0f172a;
+}
+
+.modal-close-btn {
+  border: 1px solid #d7dfea;
+  background: #fff;
+  color: #334155;
+  border-radius: 8px;
+  padding: 0.4rem 0.58rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.modal-close-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.reservation-detail-list {
+  margin-top: 0.8rem;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.reservation-detail-list p {
+  margin: 0;
+  font-size: 0.87rem;
+  color: #334155;
+}
+
+.reservation-detail-list strong {
+  color: #0f172a;
+}
+
+.modal-edit-group {
+  margin-top: 0.95rem;
+}
+
+.reservation-modal-actions {
+  margin-top: 0.95rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.56rem;
 }
 
 @media (min-width: 1181px) {
@@ -1486,6 +1862,11 @@ onBeforeUnmount(() => {
   }
 
   .btn-primary {
+    font-size: 0.86rem;
+    padding: 0.62rem 0.75rem;
+  }
+
+  .btn-secondary {
     font-size: 0.86rem;
     padding: 0.62rem 0.75rem;
   }
@@ -1591,6 +1972,15 @@ onBeforeUnmount(() => {
   .btn-primary {
     font-size: 0.84rem;
     white-space: nowrap;
+  }
+
+  .btn-secondary {
+    font-size: 0.84rem;
+    white-space: nowrap;
+  }
+
+  .reservation-modal-actions {
+    grid-template-columns: 1fr;
   }
 
   .loading-overlay {
