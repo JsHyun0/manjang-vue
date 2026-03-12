@@ -105,7 +105,11 @@
         <TimerSettings :phases="preparePhases" @update-phase="updatePhaseDuration" />
 
         <!-- SSU 전용: 토론자 입력 옵션 -->
-        <div v-if="selectedMode === 'ssu'" class="debater-input-option">
+        <div
+          v-if="selectedMode"
+          class="debater-input-option"
+          :class="selectedMode === 'free' ? 'is-free' : 'is-ssu'"
+        >
           <label class="debater-input-checkbox">
             <input type="checkbox" v-model="enableDebaterInput" />
             토론자 입력
@@ -115,30 +119,70 @@
             <!-- 긍정: 상단, 2열 -->
             <div class="debater-side">
               <h4>긍정</h4>
+              <div class="debater-role-guide">{{ debaterRoleLabels.join(' · ') }}</div>
               <div class="debater-input-row">
-                <input
-                  v-for="idx in 3"
+                <div
+                  v-for="(role, idx) in debaterRoleLabels"
                   :key="`pos-name-${idx}`"
-                  class="debater-name-input"
-                  type="text"
-                  v-model="debaterNames.positive[idx - 1]"
-                  :placeholder="`토론자 ${idx}`"
-                />
+                  class="debater-input-item"
+                >
+                  <span class="debater-role-chip">{{ role }}</span>
+                  <input
+                    :ref="(el) => setDebaterInputRef('positive', idx, el as HTMLInputElement | null)"
+                    :class="[
+                      'debater-name-input',
+                      {
+                        'is-dragging': isDebaterDragging('positive', idx),
+                        'is-drop-target': isDebaterDropTarget('positive', idx),
+                      },
+                    ]"
+                    type="text"
+                    v-model="debaterNames.positive[idx]"
+                    :placeholder="`${role} 담당`"
+                    draggable="true"
+                    @click="onDebaterInputClick('positive', idx)"
+                    @dragstart="onDebaterDragStart('positive', idx, $event)"
+                    @dragenter.prevent="onDebaterDragEnter('positive', idx)"
+                    @dragover.prevent="onDebaterDragOver('positive', idx, $event)"
+                    @drop.prevent="onDebaterDrop('positive', idx)"
+                    @dragend="onDebaterDragEnd"
+                  />
+                </div>
               </div>
             </div>
 
             <!-- 부정: 하단, 2열 -->
             <div class="debater-side">
               <h4>부정</h4>
+              <div class="debater-role-guide">{{ debaterRoleLabels.join(' · ') }}</div>
               <div class="debater-input-row">
-                <input
-                  v-for="idx in 3"
+                <div
+                  v-for="(role, idx) in debaterRoleLabels"
                   :key="`neg-name-${idx}`"
-                  class="debater-name-input"
-                  type="text"
-                  v-model="debaterNames.negative[idx - 1]"
-                  :placeholder="`토론자 ${idx}`"
-                />
+                  class="debater-input-item"
+                >
+                  <span class="debater-role-chip">{{ role }}</span>
+                  <input
+                    :ref="(el) => setDebaterInputRef('negative', idx, el as HTMLInputElement | null)"
+                    :class="[
+                      'debater-name-input',
+                      {
+                        'is-dragging': isDebaterDragging('negative', idx),
+                        'is-drop-target': isDebaterDropTarget('negative', idx),
+                      },
+                    ]"
+                    type="text"
+                    v-model="debaterNames.negative[idx]"
+                    :placeholder="`${role} 담당`"
+                    draggable="true"
+                    @click="onDebaterInputClick('negative', idx)"
+                    @dragstart="onDebaterDragStart('negative', idx, $event)"
+                    @dragenter.prevent="onDebaterDragEnter('negative', idx)"
+                    @dragover.prevent="onDebaterDragOver('negative', idx, $event)"
+                    @drop.prevent="onDebaterDrop('negative', idx)"
+                    @dragend="onDebaterDragEnd"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -627,11 +671,102 @@ const debaterNames = reactive<{ positive: string[]; negative: string[] }>({
   positive: ['', '', ''],
   negative: ['', '', ''],
 })
+type DebaterSide = 'positive' | 'negative'
+const debaterRoleLabels = computed(() =>
+  selectedMode.value === 'free' ? ['입론', '최종발언'] : ['입론', '반박', '최종발언'],
+)
+const draggedDebater = ref<{ side: DebaterSide; index: number } | null>(null)
+const debaterDropTarget = ref<{ side: DebaterSide; index: number } | null>(null)
+const debaterInputRefs = reactive<Record<DebaterSide, Array<HTMLInputElement | null>>>({
+  positive: [],
+  negative: [],
+})
+const isDebaterInputDragging = ref(false)
+const debaterInputFocusBlockedUntil = ref(0)
+const DEBATER_INPUT_FOCUS_BLOCK_MS = 220
+
+const blockDebaterInputFocus = () => {
+  debaterInputFocusBlockedUntil.value = Date.now() + DEBATER_INPUT_FOCUS_BLOCK_MS
+}
+
+const setDebaterInputRef = (side: DebaterSide, index: number, el: HTMLInputElement | null) => {
+  debaterInputRefs[side][index] = el
+}
+
+const onDebaterInputClick = (side: DebaterSide, index: number) => {
+  if (isDebaterInputDragging.value) return
+  if (Date.now() < debaterInputFocusBlockedUntil.value) return
+  const input = debaterInputRefs[side][index]
+  if (!input) return
+  input.focus()
+}
 
 const fillDebaterSideNames = (side: 'positive' | 'negative', names: string[]) => {
   for (let i = 0; i < 3; i++) {
     debaterNames[side][i] = names[i] ?? ''
   }
+}
+
+const reorderDebaterNames = (side: DebaterSide, fromIndex: number, toIndex: number) => {
+  if (fromIndex === toIndex) return
+  const list = [...debaterNames[side]]
+  const [moved] = list.splice(fromIndex, 1)
+  if (typeof moved === 'undefined') return
+  list.splice(toIndex, 0, moved)
+  for (let i = 0; i < list.length; i++) {
+    debaterNames[side][i] = list[i]
+  }
+}
+
+const onDebaterDragStart = (side: DebaterSide, index: number, event: DragEvent) => {
+  isDebaterInputDragging.value = true
+  blockDebaterInputFocus()
+  const input = event.target as HTMLInputElement | null
+  input?.blur()
+  draggedDebater.value = { side, index }
+  debaterDropTarget.value = { side, index }
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', `${side}:${index}`)
+  }
+}
+
+const onDebaterDragEnter = (side: DebaterSide, index: number) => {
+  if (!draggedDebater.value || draggedDebater.value.side !== side) return
+  debaterDropTarget.value = { side, index }
+}
+
+const onDebaterDragOver = (side: DebaterSide, index: number, event: DragEvent) => {
+  if (!draggedDebater.value || draggedDebater.value.side !== side) return
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+  debaterDropTarget.value = { side, index }
+}
+
+const onDebaterDrop = (side: DebaterSide, index: number) => {
+  const dragging = draggedDebater.value
+  if (!dragging || dragging.side !== side) {
+    onDebaterDragEnd()
+    return
+  }
+  reorderDebaterNames(side, dragging.index, index)
+  onDebaterDragEnd()
+}
+
+const onDebaterDragEnd = () => {
+  isDebaterInputDragging.value = false
+  blockDebaterInputFocus()
+  draggedDebater.value = null
+  debaterDropTarget.value = null
+}
+
+const isDebaterDragging = (side: DebaterSide, index: number) => {
+  return draggedDebater.value?.side === side && draggedDebater.value.index === index
+}
+
+const isDebaterDropTarget = (side: DebaterSide, index: number) => {
+  return debaterDropTarget.value?.side === side && debaterDropTarget.value.index === index
 }
 
 const applyScheduleFromDebate = () => {
@@ -1208,6 +1343,18 @@ watch(schedulesOnDate, (next) => {
   border-radius: 14px;
   background: #f8fbff;
   padding: 0.95rem;
+  display: grid;
+  gap: 0.72rem;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.debater-input-option.is-ssu {
+  min-width: min(100%, 560px);
+}
+
+.debater-input-option.is-free {
+  min-width: min(100%, 404px);
 }
 
 .debater-input-checkbox {
@@ -1219,29 +1366,84 @@ watch(schedulesOnDate, (next) => {
 }
 
 .debater-inputs {
-  margin-top: 0.9rem;
   display: grid;
-  gap: 0.85rem;
+  gap: 0.95rem;
+}
+
+.debater-side {
+  display: grid;
+  gap: 0.34rem;
 }
 
 .debater-side h4 {
-  margin: 0 0 0.45rem;
+  margin: 0;
   color: #2d5e9a;
   font-size: 0.94rem;
 }
 
+.debater-role-guide {
+  color: #5a7593;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
 .debater-input-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.5rem;
+  grid-template-columns: repeat(3, minmax(112px, 148px));
+  justify-content: start;
+  gap: 0.45rem;
+}
+
+.debater-input-option.is-free .debater-input-row {
+  grid-template-columns: repeat(2, minmax(112px, 148px));
+}
+
+.debater-input-item {
+  width: min(148px, 100%);
+  display: grid;
+  gap: 0.26rem;
+}
+
+.debater-role-chip {
+  align-self: start;
+  width: fit-content;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid #c9dbf2;
+  background: #edf4ff;
+  color: #356395;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.25;
 }
 
 .debater-name-input {
+  width: 100%;
+  max-width: none;
   height: 40px;
   border: 1px solid #cadcf4;
   border-radius: 10px;
-  padding: 0 0.65rem;
+  padding: 0 0.55rem;
   font-size: 0.9rem;
+  cursor: grab;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease,
+    opacity 0.12s ease;
+}
+
+.debater-name-input:focus {
+  cursor: text;
+}
+
+.debater-name-input.is-dragging {
+  opacity: 0.58;
+  cursor: grabbing;
+}
+
+.debater-name-input.is-drop-target:not(.is-dragging) {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.16);
 }
 
 .prepare-actions {
@@ -1322,7 +1524,7 @@ watch(schedulesOnDate, (next) => {
     'topic topic topic'
     'left center right';
   gap: clamp(0.7rem, 1.2vw, 1.4rem);
-  align-items: stretch;
+  align-items: start;
 }
 
 .timer-main:not(.ssu-mode) {
@@ -1386,7 +1588,16 @@ watch(schedulesOnDate, (next) => {
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.86);
   box-shadow: 0 10px 22px rgba(27, 90, 161, 0.08);
-  padding: 0.8rem;
+  padding: 0.9rem;
+  align-self: start;
+  max-height: min(740px, calc(100vh - 210px));
+  overflow-y: auto;
+}
+
+.debater-group {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .debater-group h3 {
@@ -1447,21 +1658,21 @@ watch(schedulesOnDate, (next) => {
 }
 
 .usage-counters {
-  margin-top: 0.82rem;
+  margin-top: 1.15rem;
   border: 1px solid #d6e5f8;
   border-radius: 10px;
   background: #f9fcff;
-  padding: 0.5rem;
+  padding: 0.68rem;
   display: grid;
-  gap: 0.46rem;
+  gap: 0.72rem;
 }
 
 .counter-item {
   border-radius: 8px;
-  padding: 0.34rem;
+  padding: 0.5rem 0.42rem;
   display: grid;
   justify-items: center;
-  gap: 0.34rem;
+  gap: 0.46rem;
   cursor: pointer;
 }
 
@@ -1887,8 +2098,23 @@ watch(schedulesOnDate, (next) => {
     flex-direction: column;
   }
 
+  .debater-input-option,
+  .debater-input-option.is-ssu,
+  .debater-input-option.is-free {
+    width: 100%;
+    min-width: 0;
+  }
+
   .debater-input-row {
     grid-template-columns: 1fr;
+  }
+
+  .debater-input-item {
+    width: 100%;
+  }
+
+  .debater-name-input {
+    max-width: none;
   }
 
   .timer-main.ssu-mode {
@@ -1906,6 +2132,8 @@ watch(schedulesOnDate, (next) => {
   .debaters-left,
   .debaters-right {
     width: 100%;
+    max-height: none;
+    overflow-y: visible;
   }
 
   .debater-icons {
