@@ -1,5 +1,9 @@
 import { ref, reactive, computed, onUnmounted } from 'vue'
 
+/** `public/bell_sound.mp3` — Vite는 public 파일을 루트 경로로 제공 */
+const BELL_SOUND_URL = '/bell_sound.mp3'
+let bellSoundAudio: HTMLAudioElement | null = null
+
 type IntervalHandle = ReturnType<typeof setInterval>
 type TimeoutHandle = ReturnType<typeof setTimeout>
 
@@ -140,44 +144,11 @@ export const useSSUTimer = () => {
   const playBeep = () => {
     if (typeof window === 'undefined') return
     try {
-      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext
-      if (!AudioCtx) return
-      const ctx = new AudioCtx()
-      const gain = ctx.createGain()
-      gain.connect(ctx.destination)
-      gain.gain.value = 0.0001
-
-      const beep = (frequency: number, startTime: number, duration: number, peakGain = 0.3) => {
-        const osc = ctx.createOscillator()
-        osc.type = 'square'
-        osc.frequency.setValueAtTime(frequency, startTime)
-        osc.connect(gain)
-        // 볼륨 ADSR 비슷하게
-        gain.gain.setValueAtTime(0.0001, startTime)
-        gain.gain.exponentialRampToValueAtTime(peakGain, startTime + 0.02)
-        gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration)
-        osc.start(startTime)
-        osc.stop(startTime + duration + 0.02)
-        osc.onended = () => {
-          // no-op; 전체가 끝난 뒤 close
-        }
+      if (!bellSoundAudio) {
+        bellSoundAudio = new Audio(BELL_SOUND_URL)
       }
-
-      const now = ctx.currentTime
-      // 더 확실한 2톤: 높은 → 낮은
-      beep(1200, now, 0.18, 0.35)
-      beep(800, now + 0.2, 0.22, 0.35)
-
-      // 컨텍스트 종료 예약
-      const closeAt = now + 0.5
-      const interval = setInterval(() => {
-        if (ctx.currentTime >= closeAt) {
-          clearInterval(interval)
-          try {
-            ctx.close()
-          } catch {}
-        }
-      }, 50)
+      bellSoundAudio.currentTime = 0
+      void bellSoundAudio.play().catch(() => {})
     } catch {}
   }
 
@@ -296,12 +267,17 @@ export const useSSUTimer = () => {
     if (!isRunning.value && currentTime.value > 0) {
       isRunning.value = true
       timerInterval = setInterval(() => {
+        const before = currentTime.value
         currentTime.value--
-        // 30초 알림 (SSU 단계에서만, 작전/보충 제외)
+        const t = currentTime.value
+        // 30초 알림: 남은 시간이 30초를 막 넘길 때 1회 (정확히 30초일 때만 보면 스로틀/지연 시 누락될 수 있음)
+        // SSU + CEDA(자유 토론·숙의 단계 제외), 작전/보충 제외
         if (
           !isStrategyTime.value &&
           !isSupplementTime.value &&
-          currentTime.value === 30 &&
+          before > 30 &&
+          t <= 30 &&
+          t > 0 &&
           (timerType.value === 'ssu' ||
             (timerType.value === 'free' &&
               !isCedaFreeDebateStep.value &&
@@ -309,7 +285,7 @@ export const useSSUTimer = () => {
         ) {
           triggerThirtySecondCue()
         }
-        if (currentTime.value <= 0) {
+        if (t <= 0) {
           // 시간이 끝나면 상태에 따라 처리
           if (isStrategyTime.value) {
             endStrategyTime()
