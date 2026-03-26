@@ -555,7 +555,7 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSSUTimer, defaultCEDASteps } from '@/lib/timer'
-import { listDebateItems, type DebateListItem } from '@/lib/debates'
+import { listDebateItems, type DebateListItem, type DebateType } from '@/lib/debates'
 import TimerSettings from '@/components/TimerSettings.vue'
 
 // 타이머 훅 사용
@@ -707,6 +707,33 @@ const fillDebaterSideNames = (side: 'positive' | 'negative', names: string[]) =>
   }
 }
 
+/** 자유토론 준비 화면은 측당 2칸(입론·최종발언). 등록 일정이 SSU면 3명 중 입론·최종발언 슬롯에 맞게 매핑 */
+const fillDebaterSideNamesForFreeImport = (
+  side: 'positive' | 'negative',
+  names: string[],
+  sourceDebateType: DebateType,
+) => {
+  const raw = names.map((s) => String(s ?? '').trim())
+  const nonempty = raw.filter(Boolean)
+  let first = ''
+  let second = ''
+  if (sourceDebateType === '자유토론') {
+    first = raw[0] ?? ''
+    second = raw[1] ?? ''
+  } else {
+    if (nonempty.length >= 3) {
+      first = raw[0] ?? ''
+      second = raw[2] ?? ''
+    } else {
+      first = raw[0] ?? ''
+      second = raw[1] ?? ''
+    }
+  }
+  debaterNames[side][0] = first
+  debaterNames[side][1] = second
+  debaterNames[side][2] = ''
+}
+
 const reorderDebaterNames = (side: DebaterSide, fromIndex: number, toIndex: number) => {
   if (fromIndex === toIndex) return
   const list = [...debaterNames[side]]
@@ -778,6 +805,11 @@ const applyScheduleFromDebate = () => {
     enableDebaterInput.value = true
     fillDebaterSideNames('positive', picked.participantsBySide.pro)
     fillDebaterSideNames('negative', picked.participantsBySide.con)
+    scheduleImportMessage.value = '논제와 토론자 정보를 불러왔습니다. 필요한 경우 수정하세요.'
+  } else if (selectedMode.value === 'free') {
+    enableDebaterInput.value = true
+    fillDebaterSideNamesForFreeImport('positive', picked.participantsBySide.pro, picked.debateType)
+    fillDebaterSideNamesForFreeImport('negative', picked.participantsBySide.con, picked.debateType)
     scheduleImportMessage.value = '논제와 토론자 정보를 불러왔습니다. 필요한 경우 수정하세요.'
   } else {
     scheduleImportMessage.value = '논제를 불러왔습니다. 필요한 경우 수정하세요.'
