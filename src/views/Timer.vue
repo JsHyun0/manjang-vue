@@ -405,8 +405,8 @@
             </div>
             <div class="control-row secondary" v-if="timerType === 'ssu' && isSupplementTime">
               <button class="control-btn question" @click="cancelSupplementTime()">
-                <i class="icon">↩️</i>
-                돌아가기
+                <i class="icon">❌</i>
+                사용취소
               </button>
             </div>
           </div>

@@ -1,14 +1,22 @@
 <template>
   <div class="debate-page">
+    <header class="page-heading">
+      <h1>토론 목록</h1>
+      <p>예정된 토론과 지난 토론 기록을 확인하세요.</p>
+    </header>
+
     <section class="control-panel">
       <label class="search-box">
         <span class="search-label">검색</span>
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="논제 또는 참가자 이름으로 검색"
-          autocomplete="off"
-        />
+        <div class="search-input-wrap">
+          <span class="search-icon" aria-hidden="true">🔍</span>
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="논제 또는 참가자 검색"
+            autocomplete="off"
+          />
+        </div>
       </label>
 
       <div class="filter-tabs">
@@ -471,215 +479,254 @@ const debateTypeClass = (debateType: DebateListItem['debateType']): 'free' | 'ss
 
 <style scoped>
 .debate-page {
-  --surface: #f7fbff;
-  --surface-strong: #edf5ff;
-  --line: rgba(77, 141, 219, 0.2);
-  --text-strong: #0f2744;
-  --text-subtle: #48607c;
-  --accent: #2f6fb4;
-  --accent-soft: #d7e7fb;
-  min-height: 100vh;
-  padding: 2rem;
-  background:
-    radial-gradient(circle at 0% 0%, rgba(86, 144, 216, 0.18), transparent 40%),
-    radial-gradient(circle at 100% 100%, rgba(86, 144, 216, 0.14), transparent 34%),
-    linear-gradient(160deg, #f5f9ff 0%, #f8fcff 55%, #eef5ff 100%);
+  min-height: calc(100vh - 80px);
+  padding: 44px 32px 56px;
+  background: #f6f8fc;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.page-heading {
+  margin-bottom: 24px;
+}
+
+.page-heading h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 800;
+  color: #0f1b2d;
+  letter-spacing: -0.02em;
+}
+
+.page-heading p {
+  margin: 6px 0 0;
+  font-size: 14.5px;
+  color: #5b6473;
 }
 
 .control-panel {
-  max-width: 1100px;
-  margin: 0 auto 1rem;
   border-radius: 14px;
-  border: 1px solid var(--line);
-  background: #fffffff0;
-  padding: 0.9rem;
-  display: grid;
-  grid-template-columns: minmax(280px, 1fr) auto auto;
-  gap: 0.75rem;
-  align-items: end;
+  border: 1px solid rgba(15, 27, 45, 0.07);
+  background: #ffffff;
+  padding: 16px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 18px;
 }
 
-.search-box,
+.search-box {
+  flex: 1;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
 .sort-box,
 .manage-box {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 5px;
 }
 
 .search-label,
 .sort-box span {
-  color: #4f6d8e;
-  font-size: 0.8rem;
-  font-weight: 700;
+  color: #5b6473;
+  font-size: 11.5px;
+  font-weight: 600;
 }
 
-.manage-box {
-  justify-content: flex-end;
+.search-input-wrap {
+  position: relative;
 }
 
-.search-box input,
-.sort-box select {
-  height: 42px;
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  color: #5b6473;
+  pointer-events: none;
+}
+
+.search-box input {
+  width: 100%;
+  height: 40px;
   border-radius: 10px;
-  border: 1px solid #d2e3f8;
-  background: #fafdff;
-  padding: 0 0.75rem;
-  font-size: 0.95rem;
+  border: 1px solid rgba(15, 27, 45, 0.07);
+  background: #fafbfd;
+  padding: 0 12px 0 34px;
+  font-size: 13.5px;
+  color: #0f1b2d;
+  box-sizing: border-box;
+  outline: none;
+}
+
+.sort-box select {
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 27, 45, 0.07);
+  background: #fafbfd;
+  padding: 0 12px;
+  font-size: 13.5px;
+  color: #0f1b2d;
+  appearance: none;
 }
 
 .manage-btn {
-  height: 42px;
-  border: 1px solid #b9d4f1;
+  height: 40px;
+  border: 1px solid rgba(45, 108, 223, 0.2);
   border-radius: 10px;
-  background: linear-gradient(135deg, #eff6ff, #e1edff);
-  color: #274d78;
+  background: #eef4fe;
+  color: #2d6cdf;
   font-weight: 700;
+  font-size: 13.5px;
+  padding: 0 14px;
   cursor: pointer;
 }
 
 .manage-btn:hover {
-  filter: brightness(0.98);
+  background: #e0ebfd;
 }
 
 .search-box input:focus,
 .sort-box select:focus {
   outline: none;
-  border-color: #7ca8db;
-  box-shadow: 0 0 0 3px rgba(76, 137, 213, 0.15);
+  border-color: rgba(45, 108, 223, 0.55);
+  box-shadow: 0 0 0 3px rgba(45, 108, 223, 0.12);
 }
 
 .filter-tabs {
   display: inline-flex;
-  border-radius: 12px;
-  padding: 0.25rem;
-  background: var(--surface-strong);
-  border: 1px solid var(--line);
-  gap: 0.25rem;
+  border-radius: 10px;
+  padding: 3px;
+  background: #edf2f8;
+  gap: 2px;
 }
 
 .tab-btn {
   border: none;
-  border-radius: 9px;
+  border-radius: 7px;
   background: transparent;
-  color: #4d6788;
-  padding: 0.55rem 0.85rem;
-  font-weight: 700;
+  color: #5b6473;
+  padding: 6px 13px;
+  font-weight: 500;
+  font-size: 13px;
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .tab-btn.active {
-  background: var(--accent);
+  background: #2d6cdf;
   color: #fff;
-  box-shadow: 0 4px 10px rgba(47, 111, 180, 0.32);
+  font-weight: 700;
+  box-shadow: 0 3px 8px -3px rgba(45, 108, 223, 0.4);
 }
 
 .loading-state,
 .error-state,
 .empty-state {
-  max-width: 1100px;
-  margin: 0 auto;
   border-radius: 14px;
-  border: 1px dashed #b7cfec;
-  background: #ffffffd9;
-  padding: 2.2rem;
+  border: 1px dashed rgba(15, 27, 45, 0.12);
+  background: #ffffff;
+  padding: 36px;
   text-align: center;
-  color: #4d6481;
+  color: #5b6473;
 }
 
 .loading-state h2,
 .error-state h2,
 .empty-state h2 {
   margin: 0;
-  color: #26486f;
-  font-size: 1.2rem;
+  color: #0f1b2d;
+  font-size: 18px;
 }
 
 .loading-state p,
 .error-state p,
 .empty-state p {
-  margin: 0.55rem 0 0;
+  margin: 8px 0 0;
 }
 
 .retry-btn {
-  margin-top: 1rem;
+  margin-top: 16px;
   border: none;
   border-radius: 10px;
   height: 40px;
-  padding: 0 1rem;
-  background: var(--accent);
+  padding: 0 16px;
+  background: #2d6cdf;
   color: #fff;
   font-weight: 700;
   cursor: pointer;
 }
 
 .retry-btn:hover {
-  filter: brightness(1.05);
+  background: #1d57c4;
 }
 
 .list-section {
-  max-width: 1100px;
-  margin: 0 auto 1.2rem;
+  margin-bottom: 28px;
 }
 
 .section-head {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin-bottom: 0.8rem;
+  margin-bottom: 14px;
 }
 
 .section-head h2 {
   margin: 0;
-  color: #17395f;
-  font-size: 1.15rem;
+  color: #0f1b2d;
+  font-size: 17px;
+  font-weight: 700;
 }
 
 .section-head span {
-  color: #5b7594;
-  font-size: 0.9rem;
+  color: #5b6473;
+  font-size: 13px;
 }
 
 .section-empty {
   margin: 0;
   border-radius: 12px;
-  border: 1px dashed #c2d8f2;
-  background: #ffffffcf;
-  color: #5f7691;
-  padding: 1.2rem;
+  border: 1px dashed rgba(15, 27, 45, 0.12);
+  background: #ffffff;
+  color: #5b6473;
+  padding: 18px;
+  font-size: 13.5px;
 }
 
 .debate-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
 }
 
 .debate-card {
   border-radius: 14px;
-  border: 1px solid var(--line);
-  background: #fff;
-  box-shadow: 0 8px 22px rgba(30, 73, 119, 0.08);
-  padding: 1rem;
+  border: 1px solid rgba(15, 27, 45, 0.07);
+  background: #ffffff;
+  box-shadow:
+    0 1px 0 rgba(15, 27, 45, 0.03),
+    0 8px 20px -12px rgba(45, 108, 223, 0.18);
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 12px;
   transition:
     transform 0.15s ease,
-    box-shadow 0.15s ease;
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .debate-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 28px rgba(30, 73, 119, 0.14);
-}
-
-.debate-card.upcoming {
-  background: linear-gradient(155deg, #ffffff 0%, #f5fbff 100%);
-}
-
-.debate-card.completed {
-  background: linear-gradient(155deg, #ffffff 0%, #f8faff 100%);
+  border-color: rgba(45, 108, 223, 0.22);
+  box-shadow: 0 12px 28px -12px rgba(45, 108, 223, 0.22);
 }
 
 .card-top {
@@ -692,22 +739,22 @@ const debateTypeClass = (debateType: DebateListItem['debateType']): 'free' | 'ss
 .card-badges {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  flex-wrap: nowrap;
+  gap: 5px;
+  flex-wrap: wrap;
 }
 
 .card-top time {
-  color: #5a7290;
-  font-size: 0.82rem;
+  color: #5b6473;
+  font-size: 12px;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .status-chip {
-  height: 24px;
+  height: 22px;
   border-radius: 999px;
-  padding: 0 0.65rem;
-  font-size: 0.75rem;
+  padding: 0 9px;
+  font-size: 11.5px;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
@@ -716,22 +763,22 @@ const debateTypeClass = (debateType: DebateListItem['debateType']): 'free' | 'ss
 }
 
 .status-chip.upcoming {
-  color: #0f5a9d;
-  background: var(--accent-soft);
-  border: 1px solid #aac7ec;
+  color: #2d6cdf;
+  background: #eef4fe;
+  border: 1px solid rgba(45, 108, 223, 0.11);
 }
 
 .status-chip.completed {
-  color: #5c6775;
-  background: #edf0f4;
-  border: 1px solid #d6dce5;
+  color: #5b6473;
+  background: #edf0f5;
+  border: 1px solid rgba(15, 27, 45, 0.1);
 }
 
 .type-chip {
-  height: 24px;
+  height: 22px;
   border-radius: 999px;
-  padding: 0 0.65rem;
-  font-size: 0.75rem;
+  padding: 0 9px;
+  font-size: 11.5px;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
@@ -741,71 +788,75 @@ const debateTypeClass = (debateType: DebateListItem['debateType']): 'free' | 'ss
 }
 
 .type-chip.free {
-  color: #1e5a95;
-  background: #e8f2ff;
-  border-color: #b9d2ef;
+  color: #924e12;
+  background: #fef3e7;
+  border-color: #eec89a;
 }
 
 .type-chip.ssu {
   color: #186149;
-  background: #e7f8ef;
+  background: #e7f7ee;
   border-color: #b4e1cd;
 }
 
 .debate-card h3 {
   margin: 0;
-  color: #1b3f68;
-  line-height: 1.45;
-  font-size: 1rem;
+  color: #0f1b2d;
+  line-height: 1.4;
+  font-size: 15.5px;
+  font-weight: 700;
 }
 
 .card-meta {
   margin: 0;
-  color: #5e7592;
-  font-size: 0.87rem;
+  color: #5b6473;
+  font-size: 13px;
 }
 
 .participants {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 7px;
+  align-items: center;
 }
 
 .participants span {
   border-radius: 999px;
-  padding: 0.25rem 0.55rem;
-  font-size: 0.78rem;
-  border: 1px solid #d5e5f8;
-  color: #335577;
-  background: #f4f9ff;
+  padding: 2px 9px;
+  font-size: 12px;
+  border: 1px solid rgba(15, 27, 45, 0.09);
+  color: #0f1b2d;
+  background: #f4f7fc;
 }
 
 .participants .overflow {
-  background: #eef2f8;
-  border-color: #d8e0eb;
-  color: #56657a;
+  background: transparent;
+  border-color: transparent;
+  color: #5b6473;
+  padding: 2px 4px;
 }
 
 .side-participants {
   display: grid;
-  gap: 0.35rem;
+  gap: 6px;
 }
 
 .side-row {
-  display: grid;
-  grid-template-columns: auto 1fr;
+  display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 7px;
+  flex-wrap: wrap;
 }
 
 .side-pill {
-  height: 22px;
+  height: 20px;
   border-radius: 999px;
-  padding: 0 0.55rem;
-  font-size: 0.72rem;
+  padding: 0 8px;
+  font-size: 11px;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .side-pill.pro {
@@ -822,21 +873,21 @@ const debateTypeClass = (debateType: DebateListItem['debateType']): 'free' | 'ss
 
 .card-footer {
   margin-top: auto;
-  padding-top: 0.65rem;
-  border-top: 1px solid #e2ecf9;
+  padding-top: 10px;
+  border-top: 1px solid rgba(15, 27, 45, 0.07);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.45rem;
+  gap: 8px;
 }
 
 .video-link-btn {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  border: 1px solid #c7dbf3;
-  background: #f5faff;
-  color: #2f5b89;
+  border: 1px solid rgba(45, 108, 223, 0.18);
+  background: #eef4fe;
+  color: #2d6cdf;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -844,12 +895,12 @@ const debateTypeClass = (debateType: DebateListItem['debateType']): 'free' | 'ss
 }
 
 .video-link-btn:hover {
-  background: #edf5ff;
+  background: #e0ebfd;
 }
 
 .video-link-btn svg {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
@@ -860,33 +911,35 @@ const debateTypeClass = (debateType: DebateListItem['debateType']): 'free' | 'ss
 .card-actions {
   display: flex;
   margin-left: auto;
-  gap: 0.45rem;
+  gap: 8px;
 }
 
 .card-action-btn {
   height: 32px;
   border-radius: 8px;
-  border: 1px solid #c7dbf3;
-  background: #f5faff;
-  color: #2f5b89;
-  font-size: 0.82rem;
-  font-weight: 700;
-  padding: 0 0.7rem;
+  border: 1px solid rgba(15, 27, 45, 0.07);
+  background: #fff;
+  color: #0f1b2d;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 0 12px;
   cursor: pointer;
+  transition: border-color 0.12s ease;
 }
 
 .card-action-btn.ghost:hover {
-  background: #edf5ff;
+  border-color: rgba(45, 108, 223, 0.4);
+  color: #2d6cdf;
 }
 
 .card-action-btn.danger {
-  border-color: #efcdcd;
-  background: #fff5f5;
-  color: #8f3a3a;
+  border-color: rgba(225, 29, 72, 0.2);
+  background: #fff;
+  color: #be123c;
 }
 
 .card-action-btn.danger:hover {
-  background: #ffecec;
+  background: #fff5f5;
 }
 
 .card-action-btn:disabled {
@@ -894,13 +947,45 @@ const debateTypeClass = (debateType: DebateListItem['debateType']): 'free' | 'ss
   cursor: not-allowed;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 768px) {
   .debate-page {
-    padding: 1rem;
+    padding: 24px 16px 36px;
+  }
+
+  .page-heading h1 {
+    font-size: 22px;
+  }
+
+  .page-heading p {
+    font-size: 13px;
   }
 
   .control-panel {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 14px 16px;
+    gap: 10px;
+  }
+
+  .search-box {
+    min-width: 0;
+  }
+
+  .filter-tabs {
+    align-self: flex-start;
+  }
+
+  .debate-grid {
     grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .debate-card {
+    padding: 16px;
+  }
+
+  .debate-card h3 {
+    font-size: 14.5px;
   }
 }
 </style>

@@ -1,253 +1,553 @@
 <template>
-  <div class="home">
-    <section v-if="isAdmin" class="admin-hero">
-      <div class="admin-head">
-        <p class="admin-label">ADMIN MODE</p>
-        <h2>관리자 대시보드</h2>
-        <p>토론 목록에서 새 토론 생성/수정/삭제를 수행할 수 있습니다.</p>
-      </div>
-      <div class="admin-actions">
-        <router-link to="/record" class="admin-btn primary">토론 목록 보기</router-link>
-        <router-link to="/record/manage" class="admin-btn">토론 관리 페이지</router-link>
-      </div>
-    </section>
-
-    <section class="hero">
-      <div class="hero-content">
-        <h1 class="hero-title">만장일치</h1>
-        <p class="hero-subtitle">
-          토론을 통해 성장하는 공간. 함께 생각을 나누고 결론에 이르는 과정을 경험해보세요.
-        </p>
-        <div class="sns-links">
-          <a
-            class="sns-button"
-            href="https://cafe.naver.com/soongsildebate"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="네이버 카페 바로가기"
-          >
-            <img :src="naverCafeLogo" alt="네이버 카페" />
-          </a>
+  <div class="home-page">
+    <div class="home-shell">
+      <section v-if="isAdmin" class="admin-banner">
+        <div class="admin-text">
+          <p class="admin-label">ADMIN MODE</p>
+          <h2>관리자 대시보드</h2>
+          <p class="admin-desc">토론 목록 페이지에서 새 토론을 생성·수정·삭제할 수 있습니다.</p>
         </div>
-      </div>
-      <div class="hero-image">
-        <img :src="heroImage" alt="만장일치 로고" />
-      </div>
-    </section>
+        <div class="admin-actions">
+          <router-link to="/record" class="admin-btn primary">토론 목록 보기</router-link>
+          <router-link to="/record/manage" class="admin-btn">토론 관리</router-link>
+        </div>
+      </section>
 
-    <footer class="contact-footer">
-      <div class="contact-left">개발자 연락처</div>
-      <div class="contact-right">이메일: hyunjiseung0x@gmail.com</div>
-    </footer>
+      <section class="hero">
+        <div class="hero-glow" />
+        <div class="hero-text">
+          <span class="hero-badge">
+            <span class="dot" />
+            SOONGSIL DEBATE CLUB
+          </span>
+          <h1 class="hero-title">
+            토론으로 닿는<br />
+            <span class="hero-accent">만장일치</span>의 순간
+          </h1>
+          <p class="hero-sub">
+            생각을 나누고, 근거를 다듬고, 결론에 이르는 모든 과정을 한 곳에서. 타이머·예약·기록까지
+            토론에 필요한 도구를 모았습니다.
+          </p>
+          <div class="hero-actions">
+            <router-link to="/reservation" class="btn btn-primary">토론 예약하기 →</router-link>
+            <router-link to="/record" class="btn btn-secondary">토론 목록 보기</router-link>
+          </div>
+          <div class="hero-meta">
+            <span class="meta-label">COMMUNITY</span>
+            <span class="meta-divider" />
+            <a
+              class="meta-link"
+              href="https://cafe.naver.com/soongsildebate"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img :src="naverCafeLogo" alt="" />
+              네이버 카페 →
+            </a>
+          </div>
+        </div>
+        <div class="hero-image">
+          <div class="logo-card">
+            <img :src="heroImage" alt="만장일치" />
+          </div>
+        </div>
+      </section>
+
+      <section class="features">
+        <router-link
+          v-for="feature in features"
+          :key="feature.title"
+          :to="feature.to"
+          class="feature-card"
+          @click="feature.onClick?.($event)"
+        >
+          <div class="feature-icon">{{ feature.icon }}</div>
+          <div class="feature-body">
+            <div class="feature-title">{{ feature.title }}</div>
+            <div class="feature-desc">{{ feature.desc }}</div>
+          </div>
+          <span class="feature-arrow-mobile">→</span>
+          <div class="feature-link-row">{{ feature.link }} →</div>
+        </router-link>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import heroImage from '@/assets/logo.jpeg'
 import naverCafeLogo from '@/assets/naver_cafe.webp'
 import { useAuth } from '@/lib/auth'
 import { warmBackend } from '@/lib/backendWarmup'
 
+const router = useRouter()
 const { isAdmin } = useAuth()
 
 onMounted(() => {
   void warmBackend()
 })
+
+function goToTimerReset(e: Event) {
+  e.preventDefault()
+  const ts = Date.now().toString()
+  router.push({ path: '/timer', query: { reset: '1', ts } })
+}
+
+type Feature = {
+  icon: string
+  title: string
+  desc: string
+  link: string
+  to: string
+  onClick?: (e: Event) => void
+}
+
+const features: Feature[] = [
+  {
+    icon: '⏱',
+    title: '토론 타이머',
+    desc: 'SSU·CEDA·자유토론 모드를 모두 지원하는 정밀 타이머',
+    link: '타이머 바로가기',
+    to: '/timer',
+    onClick: goToTimerReset,
+  },
+  {
+    icon: '📅',
+    title: '회의실 예약',
+    desc: '시간대별로 빈 슬롯을 한눈에. 클릭 한 번으로 예약',
+    link: '예약 바로가기',
+    to: '/reservation',
+  },
+  {
+    icon: '📚',
+    title: '토론 기록',
+    desc: '주제, 참가자, 결과까지. 지난 토론을 다시 펼쳐보세요',
+    link: '목록 바로가기',
+    to: '/record',
+  },
+]
 </script>
 
 <style scoped>
-.home {
+.home-page {
+  background: #f6f8fc;
   min-height: 100%;
-  padding: 2rem;
+  flex: 1;
   display: flex;
   flex-direction: column;
-  flex: 1;
 }
 
-.admin-hero {
-  max-width: 1000px;
-  margin: 0 auto 1rem;
-  border-radius: 14px;
-  border: 1px solid rgba(39, 130, 93, 0.25);
-  background: linear-gradient(135deg, #e8f8ef, #f6fcf9);
-  padding: 1.1rem 1.2rem;
+.home-shell {
+  flex: 1;
+  width: 100%;
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 44px 32px 56px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.admin-banner {
+  border-radius: 16px;
+  border: 1px solid rgba(31, 139, 90, 0.2);
+  background: linear-gradient(135deg, #e7f7ee, #f6fcf9);
+  padding: 18px 22px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.8rem;
+  gap: 14px;
 }
 
 .admin-label {
   margin: 0;
-  font-size: 0.75rem;
+  font-size: 11px;
   letter-spacing: 0.08em;
-  color: #19664a;
+  color: #166347;
   font-weight: 700;
 }
 
-.admin-head h2 {
-  margin: 0.2rem 0;
-  color: #14553d;
+.admin-text h2 {
+  margin: 4px 0 2px;
+  color: #0f3d2c;
+  font-size: 18px;
+  font-weight: 700;
 }
 
-.admin-head p {
+.admin-desc {
   margin: 0;
   color: #2f6f56;
+  font-size: 13.5px;
 }
 
 .admin-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .admin-btn {
   text-decoration: none;
   border-radius: 10px;
-  padding: 0.6rem 0.85rem;
-  border: 1px solid #a8d8c1;
+  padding: 9px 14px;
+  border: 1px solid #b4e1cd;
   color: #14553d;
   background: #fff;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .admin-btn.primary {
-  background: #1d7f5a;
-  border-color: #1d7f5a;
+  background: #1f8b5a;
+  border-color: #1f8b5a;
   color: #fff;
 }
 
 .hero {
+  position: relative;
+  overflow: hidden;
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid rgba(45, 108, 223, 0.11);
+  box-shadow:
+    0 1px 0 rgba(15, 27, 45, 0.04),
+    0 20px 40px -28px rgba(45, 108, 223, 0.22);
+  padding: 52px;
   display: grid;
-  grid-template-columns: 1.2fr 0.8fr;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 48px;
   align-items: center;
-  gap: 2rem;
-  max-width: 1000px;
-  margin: 0 auto 3rem;
-  padding: 2rem;
-  background: linear-gradient(180deg, var(--light-blue), #fff 60%);
-  border-radius: 16px;
-  box-shadow: 0 6px 20px rgba(74, 144, 226, 0.15);
-  border: 1px solid rgba(74, 144, 226, 0.15);
+}
+
+.hero-glow {
+  position: absolute;
+  right: -120px;
+  top: -120px;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #e6f0ff 0%, transparent 68%);
+  pointer-events: none;
+}
+
+.hero-text {
+  position: relative;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  background: #eef4fe;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #2d6cdf;
+  letter-spacing: 0.03em;
+  margin-bottom: 22px;
+}
+
+.hero-badge .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #2d6cdf;
 }
 
 .hero-title {
-  font-size: 3rem;
-  color: var(--primary-blue);
-  margin-bottom: 1rem;
+  font-size: 52px;
+  line-height: 1.08;
+  margin: 0;
+  color: #0f1b2d;
+  font-weight: 800;
+  letter-spacing: -0.025em;
 }
 
-.hero-subtitle {
-  font-size: 1.1rem;
-  color: #555;
-  line-height: 1.8;
+.hero-accent {
+  color: #2d6cdf;
 }
 
-.sns-links {
-  margin-top: 1.25rem;
+.hero-sub {
+  margin-top: 18px;
+  font-size: 16.5px;
+  line-height: 1.65;
+  color: #5b6473;
+  max-width: 460px;
+}
+
+.hero-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: 10px;
+  margin-top: 28px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
-.sns-button {
+.btn {
+  text-decoration: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: #fff;
-  border: 1px solid rgba(74, 144, 226, 0.2);
-  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.15);
+  padding: 13px 22px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
   transition:
     transform 0.12s ease,
-    box-shadow 0.12s ease,
-    border-color 0.12s ease;
+    box-shadow 0.12s ease;
 }
 
-.sns-button:hover {
+.btn-primary {
+  background: #2d6cdf;
+  color: #fff;
+  box-shadow: 0 6px 16px -6px rgba(45, 108, 223, 0.5);
+}
+
+.btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(74, 144, 226, 0.22);
-  border-color: rgba(74, 144, 226, 0.35);
+  box-shadow: 0 8px 18px -6px rgba(45, 108, 223, 0.55);
 }
 
-.sns-button img {
-  width: 22px;
-  height: 22px;
+.btn-secondary {
+  background: #fff;
+  color: #0f1b2d;
+  border-color: rgba(15, 27, 45, 0.07);
+}
+
+.btn-secondary:hover {
+  border-color: rgba(15, 27, 45, 0.18);
+}
+
+.hero-meta {
+  margin-top: 22px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.meta-label {
+  font-size: 11.5px;
+  color: #5b6473;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+.meta-divider {
+  width: 1px;
+  height: 12px;
+  background: rgba(15, 27, 45, 0.07);
+}
+
+.meta-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: #0f1b2d;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.meta-link img {
+  width: 17px;
+  height: 17px;
+  border-radius: 4px;
 }
 
 .hero-image {
-  display: flex;
-  justify-content: center;
+  display: grid;
+  place-items: center;
+  position: relative;
 }
 
-.hero-image img {
-  width: 220px;
-  height: 220px;
-  padding: 1.25rem;
+.logo-card {
+  width: 264px;
+  height: 264px;
+  border-radius: 20px;
   background: #fff;
-  border-radius: 16px;
-  border: 1px solid rgba(74, 144, 226, 0.2);
-  box-shadow: 0 8px 24px rgba(74, 144, 226, 0.2);
+  border: 1px solid rgba(45, 108, 223, 0.11);
+  padding: 26px;
+  box-shadow: 0 28px 56px -28px rgba(45, 108, 223, 0.32);
+  display: grid;
+  place-items: center;
+}
+
+.logo-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 12px;
+}
+
+.features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.feature-card {
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 27, 45, 0.07);
+  padding: 24px;
+  text-decoration: none;
+  color: inherit;
+  display: block;
+  transition:
+    transform 0.12s ease,
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(45, 108, 223, 0.22);
+  box-shadow: 0 8px 20px -12px rgba(45, 108, 223, 0.18);
+}
+
+.feature-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: #eef4fe;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  margin-bottom: 14px;
+  flex-shrink: 0;
+}
+
+.feature-title {
+  font-size: 15.5px;
+  font-weight: 700;
+  color: #0f1b2d;
+  margin-bottom: 6px;
+}
+
+.feature-desc {
+  font-size: 13.5px;
+  color: #5b6473;
+  line-height: 1.55;
+}
+
+.feature-arrow-mobile {
+  display: none;
+}
+
+.feature-link-row {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(15, 27, 45, 0.07);
+  font-size: 12.5px;
+  color: #2d6cdf;
+  font-weight: 600;
 }
 
 @media (max-width: 860px) {
   .hero {
+    padding: 28px 24px;
     grid-template-columns: 1fr;
-    text-align: center;
+    gap: 20px;
   }
 
-  .hero-image img {
-    width: 160px;
-    height: 160px;
+  .hero-title {
+    font-size: 32px;
   }
-}
 
-/* ----- 연락처 푸터 영역 ----- */
-.contact-footer {
-  /* 화면 가로 전체를 차지 */
-  width: 100vw;
-  margin-left: calc(50% - 50vw);
-  margin-right: calc(50% - 50vw);
-  padding: 1.25rem 1.5rem;
-  border-top: 1px solid rgba(74, 144, 226, 0.2);
-  color: #4b5563;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-top: auto;
-}
+  .hero-sub {
+    font-size: 14.5px;
+    margin-top: 14px;
+  }
 
-.contact-left {
-  font-size: 0.95rem;
-}
+  .hero-actions {
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 22px;
+  }
 
-.contact-right {
-  display: flex;
-  gap: 0.75rem;
-}
+  .hero-actions .btn {
+    width: 100%;
+    padding: 15px;
+    font-size: 15px;
+  }
 
-.contact-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.6rem;
-  border-radius: 999px;
-  background: var(--light-blue);
-  color: var(--primary-blue);
-  border: 1px solid rgba(74, 144, 226, 0.25);
-  font-size: 0.85rem;
-}
+  .hero-image {
+    margin-top: 4px;
+  }
 
-.contact-chip a {
-  color: inherit;
-  text-decoration: none;
+  .logo-card {
+    width: 140px;
+    height: 140px;
+    border-radius: 18px;
+    padding: 16px;
+    box-shadow: 0 18px 36px -18px rgba(45, 108, 223, 0.32);
+  }
+
+  .features {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .feature-card {
+    padding: 16px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .feature-icon {
+    width: 42px;
+    height: 42px;
+    margin-bottom: 0;
+    font-size: 19px;
+  }
+
+  .feature-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .feature-title {
+    font-size: 15px;
+    margin-bottom: 3px;
+  }
+
+  .feature-desc {
+    font-size: 12.5px;
+    line-height: 1.45;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .feature-arrow-mobile {
+    display: block;
+    color: #2d6cdf;
+    font-size: 18px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  .feature-link-row {
+    display: none;
+  }
 }
 
 @media (max-width: 640px) {
-  .admin-hero {
+  .home-shell {
+    padding: 20px 16px 36px;
+    gap: 14px;
+  }
+
+  .admin-banner {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -257,9 +557,9 @@ onMounted(() => {
     flex-direction: column;
   }
 
-  .contact-footer {
-    flex-direction: column;
-    align-items: flex-start;
+  .admin-btn {
+    width: 100%;
+    text-align: center;
   }
 }
 </style>

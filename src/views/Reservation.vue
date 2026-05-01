@@ -1,6 +1,10 @@
 <template>
   <div class="reservation-page">
     <main class="layout">
+      <header class="page-heading">
+        <h1>회의실 예약</h1>
+        <p>원하는 시간대를 드래그하거나 클릭해 선택하세요.</p>
+      </header>
       <section class="reservation-shell">
         <section class="workspace">
           <div class="schedule-panel">
@@ -76,7 +80,8 @@
                         :class="{
                           'is-boundary': isHalfHourMark(time),
                           'is-selected': isSelected(day.key, time),
-                          'is-reserved': isReservedTime(day.key, time),
+                          'is-reserved': isFullyReserved(day.key, time),
+                          'is-partial-reserved': isPartiallyReserved(day.key, time),
                           'is-disabled': isUnavailableSlot(day.key, time),
                           'is-past-slot': isPastSlot(day.key, time),
                         }"
@@ -92,7 +97,8 @@
                         v-for="ev in eventRectsByDate[day.key] ?? []"
                         :key="`ev-${day.key}-${ev.reservationId}-${ev.start}-${ev.span}-${ev.lane}`"
                         class="event-block"
-                        :title="`${ev.name} (${ev.startLabel}~${ev.endLabel})`"
+                        :class="{ 'is-open-slot': ev.allowSimultaneous && ev.laneCount < 2 }"
+                        :title="`${ev.name} (${ev.startLabel}~${ev.endLabel})${ev.allowSimultaneous && ev.laneCount < 2 ? ' · 동시예약 가능' : ''}`"
                         :style="eventBlockStyle(ev)"
                         role="button"
                         tabindex="0"
@@ -102,6 +108,7 @@
                       >
                         <span class="event-name">{{ ev.name }}</span>
                         <span class="event-time">{{ ev.startLabel }}~{{ ev.endLabel }}</span>
+                        <span v-if="ev.allowSimultaneous && ev.laneCount < 2" class="open-slot-badge">동시 사용 가능</span>
                       </div>
 
                       <div
@@ -182,6 +189,24 @@
                     />
                     <p class="field-help">등록되지 않은 일정은 용도를 직접 입력해 예약할 수 있습니다.</p>
                   </template>
+                </div>
+
+                <div class="field">
+                  <label class="label">동시 예약</label>
+                  <label class="simultaneous-toggle">
+                    <input
+                      type="checkbox"
+                      class="simultaneous-checkbox"
+                      v-model="reservationForm.allowSimultaneous"
+                    />
+                    <span class="simultaneous-label-text">다른 팀의 동시 예약 허용</span>
+                  </label>
+                  <p class="field-help">
+                    허용 시 같은 시간대에 최대 2팀까지 예약할 수 있습니다.
+                    <template v-if="hasPartiallyReservedSelected && !reservationForm.allowSimultaneous">
+                      <br /><span class="field-help-warn">선택한 시간대에 이미 예약이 있습니다. 동시 예약을 허용해야 예약할 수 있습니다.</span>
+                    </template>
+                  </p>
                 </div>
               </div>
 
@@ -313,6 +338,8 @@ type RangeBlock = { start: number; span: number }
 type DragPreview = RangeBlock & { date: string }
 type EventRect = RangeBlock & {
   lane: number
+  laneCount: number
+  allowSimultaneous: boolean
   reservationId: string
   name: string
   title: string | null
@@ -336,6 +363,7 @@ type ReservationFormState = {
   scheduleMode: ScheduleMode
   debateId: string
   customPurpose: string
+  allowSimultaneous: boolean
 }
 
 const weekdayNames = ['일', '월', '화', '수', '목', '금', '토']
@@ -393,6 +421,7 @@ const formatKoreanDate = (dateKey: string): string => {
 const buildInitialReservationForm = (): ReservationFormState => ({
   name: '',
   scheduleMode: 'none',
+  allowSimultaneous: false,
   debateId: '',
   customPurpose: '',
 })
@@ -573,20 +602,45 @@ const clearDragState = () => {
   dragCurrentTime.value = null
 }
 
-const reservedTimeSetByDate = computed<Record<string, Set<string>>>(() => {
-  const next: Record<string, Set<string>> = {}
+type SlotInfo = { reservationIds: Set<string>; allAllowSimultaneous: boolean }
+
+const slotInfoByDate = computed<Record<string, Map<string, SlotInfo>>>(() => {
+  const result: Record<string, Map<string, SlotInfo>> = {}
   weekDateKeys.value.forEach((dateKey) => {
-    next[dateKey] = new Set((reservationsByDate.value[dateKey] ?? []).map((reservation) => reservation.timeSlot))
+    const slotMap = new Map<string, SlotInfo>()
+    for (const r of reservationsByDate.value[dateKey] ?? []) {
+      const info = slotMap.get(r.timeSlot) ?? { reservationIds: new Set<string>(), allAllowSimultaneous: true }
+      info.reservationIds.add(r.id)
+      if (!r.allowSimultaneous) info.allAllowSimultaneous = false
+      slotMap.set(r.timeSlot, info)
+    }
+    result[dateKey] = slotMap
   })
-  return next
+  return result
 })
 
+// 슬롯에 예약 존재 여부 (시각적 표시용)
 const isReservedTime = (dateKey: string, time: string): boolean => {
-  return reservedTimeSetByDate.value[dateKey]?.has(time) ?? false
+  return (slotInfoByDate.value[dateKey]?.get(time)?.reservationIds.size ?? 0) > 0
+}
+
+// 슬롯이 완전히 차서 새 예약 불가 (2팀 이상, 또는 1팀인데 동시예약 비허용)
+const isFullyReserved = (dateKey: string, time: string): boolean => {
+  const info = slotInfoByDate.value[dateKey]?.get(time)
+  if (!info || info.reservationIds.size === 0) return false
+  if (info.reservationIds.size >= 2) return true
+  return !info.allAllowSimultaneous
+}
+
+// 슬롯에 예약 1개 있고 동시예약 허용 중 (추가 예약 가능하지만 동시예약 허용 필요)
+const isPartiallyReserved = (dateKey: string, time: string): boolean => {
+  const info = slotInfoByDate.value[dateKey]?.get(time)
+  if (!info || info.reservationIds.size !== 1) return false
+  return info.allAllowSimultaneous
 }
 
 const isUnavailableSlot = (dateKey: string, time: string) => {
-  return isPastSlot(dateKey, time) || isReservedTime(dateKey, time)
+  return isPastSlot(dateKey, time) || isFullyReserved(dateKey, time)
 }
 
 const onSlotMouseDown = (dateKey: string, time: string, e?: MouseEvent) => {
@@ -775,6 +829,7 @@ const eventRectsByDate = computed<Record<string, EventRect[]>>(() => {
         name: string
         title: string | null
         reservedBy: string | null
+        allowSimultaneous: boolean
         indices: number[]
       }
     >()
@@ -789,6 +844,7 @@ const eventRectsByDate = computed<Record<string, EventRect[]>>(() => {
         name: r.name,
         title: r.title ?? null,
         reservedBy: r.reservedBy ?? null,
+        allowSimultaneous: r.allowSimultaneous,
         indices: [],
       }
       bucket.indices.push(idx)
@@ -800,26 +856,28 @@ const eventRectsByDate = computed<Record<string, EventRect[]>>(() => {
       name: string
       title: string | null
       reservedBy: string | null
+      allowSimultaneous: boolean
       start: number
       end: number
     }> = []
-    for (const { reservationId, name, title, reservedBy, indices } of grouped.values()) {
+    for (const { reservationId, name, title, reservedBy, allowSimultaneous, indices } of grouped.values()) {
       indices.sort((a, b) => a - b)
       let s = -1
       let p = -2
       for (const idx of indices) {
         if (idx !== p + 1) {
-          if (s !== -1) intervals.push({ reservationId, name, title, reservedBy, start: s, end: p })
+          if (s !== -1) intervals.push({ reservationId, name, title, reservedBy, allowSimultaneous, start: s, end: p })
           s = idx
         }
         p = idx
       }
-      if (s !== -1) intervals.push({ reservationId, name, title, reservedBy, start: s, end: p })
+      if (s !== -1) intervals.push({ reservationId, name, title, reservedBy, allowSimultaneous, start: s, end: p })
     }
 
     intervals.sort((a, b) => a.start - b.start || b.end - a.end)
     const laneEnds: number[] = []
-    const rects: EventRect[] = []
+    type RawRect = Omit<EventRect, 'laneCount'>
+    const rawRects: RawRect[] = []
 
     for (const interval of intervals) {
       let lane = 0
@@ -834,10 +892,11 @@ const eventRectsByDate = computed<Record<string, EventRect[]>>(() => {
       const startLabel = timeSlots[interval.start] ?? ''
       const endBase = timeSlots[interval.end] ?? ''
 
-      rects.push({
+      rawRects.push({
         start: interval.start,
         span: interval.end - interval.start + 1,
         lane,
+        allowSimultaneous: interval.allowSimultaneous,
         reservationId: interval.reservationId,
         name: interval.name,
         title: interval.title,
@@ -847,7 +906,17 @@ const eventRectsByDate = computed<Record<string, EventRect[]>>(() => {
       })
     }
 
-    result[dateKey] = rects
+    // 각 rect와 겹치는 rect 수를 세어 laneCount 계산 (최대 2)
+    result[dateKey] = rawRects.map((rect) => {
+      let concurrent = 1
+      for (const other of rawRects) {
+        if (other === rect) continue
+        if (rect.start <= other.start + other.span - 1 && other.start <= rect.start + rect.span - 1) {
+          concurrent++
+        }
+      }
+      return { ...rect, laneCount: Math.min(concurrent, 2) }
+    })
   }
 
   return result
@@ -901,10 +970,21 @@ const actionLabel = computed(() => {
   if (!selectedCount.value) return '예약 확정'
   return `${selectedDurationLabel.value} 예약 확정`
 })
+
+// 선택된 슬롯 중 동시예약 허용 중인 슬롯(1팀 예약 + allAllowSimultaneous)이 있는지
+const hasPartiallyReservedSelected = computed(() => {
+  for (const key of selectedSet.value) {
+    const { dateKey, time } = parseSlotKey(key)
+    if (isPartiallyReserved(dateKey, time)) return true
+  }
+  return false
+})
+
 const isSubmitDisabled = computed(() => {
   if (!reservationForm.value.name || selectedCount.value === 0 || isSubmitting.value) return true
   if (reservationForm.value.scheduleMode === 'debate' && !reservationForm.value.debateId) return true
   if (reservationForm.value.scheduleMode === 'custom' && !customPurposeTitle.value) return true
+  if (hasPartiallyReservedSelected.value && !reservationForm.value.allowSimultaneous) return true
   return false
 })
 
@@ -913,12 +993,20 @@ const selectionBlockStyle = (block: RangeBlock) => ({
   height: `calc(var(--slot-height) * ${block.span} - 6px)`,
 })
 
-const eventBlockStyle = (event: EventRect) => ({
-  top: `calc(var(--slot-height) * ${event.start} + 3px)`,
-  height: `calc(var(--slot-height) * ${event.span} - 6px)`,
-  left: `${8 + event.lane * 12}px`,
-  right: '8px',
-})
+const eventBlockStyle = (event: EventRect) => {
+  const top = `calc(var(--slot-height) * ${event.start} + 3px)`
+  const height = `calc(var(--slot-height) * ${event.span} - 6px)`
+  if (event.laneCount >= 2) {
+    // 2개 예약: 바깥쪽 각 8px, 블록 사이 4px 간격으로 균일하게
+    return {
+      top,
+      height,
+      left: event.lane === 0 ? '8px' : 'calc(50% + 2px)',
+      right: event.lane === 0 ? 'calc(50% + 2px)' : '8px',
+    }
+  }
+  return { top, height, left: '16px', right: '16px' }
+}
 
 async function scrollToDefaultTime() {
   await nextTick()
@@ -1010,6 +1098,7 @@ const handleReservation = async () => {
           selectedDebateId.value,
           customPurposeTitle.value || null,
           currentUserId.value,
+          reservationForm.value.allowSimultaneous,
         ),
       ),
     )
@@ -1101,6 +1190,7 @@ watch(
     () => reservationForm.value.scheduleMode,
     () => reservationForm.value.debateId,
     () => reservationForm.value.customPurpose,
+    () => reservationForm.value.allowSimultaneous,
   ],
   () => {
     if (submitFeedback.value?.type === 'error') {
@@ -1164,31 +1254,44 @@ onBeforeUnmount(() => {
 <style scoped>
 .reservation-page {
   min-height: calc(100vh - 80px);
-  padding: 1rem 0 1.4rem;
-  background:
-    radial-gradient(circle at 0% 0%, rgba(86, 144, 216, 0.16), transparent 38%),
-    radial-gradient(circle at 100% 100%, rgba(86, 144, 216, 0.12), transparent 34%),
-    linear-gradient(160deg, #f5f9ff 0%, #f8fcff 55%, #eef5ff 100%);
+  padding: 44px 0 56px;
+  background: #f6f8fc;
 }
 
 .layout {
   width: 100%;
-  max-width: none;
+  max-width: 1600px;
   margin: 0 auto;
-  padding: 0 20px;
+  padding: 0 32px;
+}
+
+.page-heading {
+  margin-bottom: 24px;
+}
+
+.page-heading h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 800;
+  color: #0f1b2d;
+  letter-spacing: -0.02em;
+}
+
+.page-heading p {
+  margin: 6px 0 0;
+  font-size: 14.5px;
+  color: #5b6473;
 }
 
 .reservation-shell {
   display: block;
-  min-height: calc(100vh - 80px);
 }
 
 .workspace {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 20px;
   align-items: stretch;
-  min-height: calc(100vh - 80px);
 }
 
 .schedule-panel {
@@ -1197,20 +1300,24 @@ onBeforeUnmount(() => {
   gap: 0;
   min-width: 0;
   padding: 0;
-  border: 1px solid #d5e4f4;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 10px 26px rgba(30, 73, 119, 0.08);
+  border: 1px solid rgba(45, 108, 223, 0.11);
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow:
+    0 1px 0 rgba(15, 27, 45, 0.03),
+    0 8px 20px -12px rgba(45, 108, 223, 0.18);
   overflow: hidden;
   width: 100%;
 }
 
 .card-panel {
-  padding: 0.95rem 1rem 1rem;
-  border-radius: 12px;
-  border: 1px solid #d8e6f6;
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 8px 20px rgba(30, 73, 119, 0.08);
+  padding: 28px;
+  border-radius: 20px;
+  border: 1px solid rgba(45, 108, 223, 0.11);
+  background: #ffffff;
+  box-shadow:
+    0 1px 0 rgba(15, 27, 45, 0.03),
+    0 8px 20px -12px rgba(45, 108, 223, 0.18);
 }
 
 .schedule-head {
@@ -1218,8 +1325,8 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.7rem 0.85rem;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 18px 24px;
+  border-bottom: 1px solid rgba(15, 27, 45, 0.07);
 }
 
 .schedule-title-group {
@@ -1229,23 +1336,23 @@ onBeforeUnmount(() => {
 
 .schedule-range {
   margin: 0;
-  color: #0f172a;
-  font-size: 1.05rem;
+  color: #0f1b2d;
+  font-size: 17px;
   font-weight: 700;
 }
 
 .nav-controls {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 6px;
   flex-shrink: 0;
 }
 
 .nav-triangle {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border-radius: 8px;
-  border: 1px solid #d6deea;
+  border: 1px solid rgba(15, 27, 45, 0.07);
   background: #fff;
   cursor: pointer;
   position: relative;
@@ -1265,35 +1372,36 @@ onBeforeUnmount(() => {
 .nav-triangle.prev::before {
   border-top: 5px solid transparent;
   border-bottom: 5px solid transparent;
-  border-right: 8px solid #475569;
+  border-right: 8px solid #5b6473;
   margin-left: -1px;
 }
 
 .nav-triangle.next::before {
   border-top: 5px solid transparent;
   border-bottom: 5px solid transparent;
-  border-left: 8px solid #475569;
+  border-left: 8px solid #5b6473;
   margin-left: 1px;
 }
 
 .nav-triangle:hover {
-  border-color: #9caec8;
+  border-color: rgba(45, 108, 223, 0.4);
 }
 
 .today-btn {
-  height: 34px;
-  padding: 0 0.75rem;
+  height: 32px;
+  padding: 0 12px;
   border-radius: 8px;
-  border: 1px solid #d6deea;
-  background: #fff;
-  color: #334155;
+  border: 1px solid rgba(45, 108, 223, 0.11);
+  background: #eef4fe;
+  color: #2d6cdf;
   font-weight: 600;
+  font-size: 13px;
   cursor: pointer;
   transition: border-color 0.12s ease;
 }
 
 .today-btn:hover {
-  border-color: #9caec8;
+  border-color: rgba(45, 108, 223, 0.4);
 }
 
 .week-scroller {
@@ -1302,8 +1410,8 @@ onBeforeUnmount(() => {
   min-height: 340px;
   height: clamp(340px, 60vh, 760px);
   border: 0;
-  border-radius: 0 0 14px 14px;
-  background: rgba(255, 255, 255, 0.92);
+  border-radius: 0 0 20px 20px;
+  background: #ffffff;
   user-select: none;
 }
 
@@ -1354,40 +1462,40 @@ onBeforeUnmount(() => {
   position: sticky;
   top: 0;
   z-index: 20;
-  height: 42px;
+  height: 48px;
   display: flex;
   justify-content: center;
-  padding: 0.45rem 0.45rem;
-  border-bottom: 1px solid #e7edf5;
-  background: #f8fafc;
+  padding: 8px;
+  border-bottom: 1px solid rgba(15, 27, 45, 0.07);
+  background: #fafbfd;
 }
 
 .corner-head {
   left: 0;
   z-index: 40;
   align-items: flex-end;
-  font-size: 0.72rem;
-  color: #64748b;
+  font-size: 11.5px;
+  color: #5b6473;
   font-weight: 600;
-  border-right: 1px solid #e7edf5;
+  border-right: 1px solid rgba(15, 27, 45, 0.07);
 }
 
 .day-head {
   align-items: center;
-  border-right: 1px solid #eef2f7;
+  border-right: 1px solid rgba(15, 27, 45, 0.07);
 }
 
 .day-head.is-today {
-  background: #eff6ff;
+  background: #eef4fe;
 }
 
 .day-head.is-past {
-  background: #f8fafc;
+  background: #fafbfd;
 }
 
 .day-display {
-  font-size: 0.84rem;
-  color: #0f172a;
+  font-size: 13px;
+  color: #0f1b2d;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -1397,29 +1505,29 @@ onBeforeUnmount(() => {
   left: 0;
   z-index: 30;
   background: #fff;
-  border-right: 1px solid #e7edf5;
-  box-shadow: 10px 0 14px -14px rgba(30, 73, 119, 0.35);
+  border-right: 1px solid rgba(15, 27, 45, 0.07);
+  box-shadow: 10px 0 14px -14px rgba(45, 108, 223, 0.18);
 }
 
 .time-slot-label {
   height: var(--slot-height);
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid rgba(15, 27, 45, 0.04);
   display: flex;
   align-items: flex-start;
   justify-content: flex-end;
-  padding-right: 0.4rem;
-  font-size: 0.68rem;
+  padding-right: 8px;
+  font-size: 11px;
   color: #94a3b8;
   line-height: 1;
 }
 
 .time-slot-label.is-boundary {
-  color: #475569;
-  border-bottom-color: #e2e8f0;
+  color: #5b6473;
+  border-bottom-color: rgba(15, 27, 45, 0.07);
 }
 
 .time-slot-label:first-child {
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid rgba(15, 27, 45, 0.07);
 }
 
 .time-slot-label.final {
@@ -1431,16 +1539,16 @@ onBeforeUnmount(() => {
 .day-column {
   position: relative;
   height: calc(var(--slot-height) * var(--slot-count));
-  border-right: 1px solid #eef2f7;
+  border-right: 1px solid rgba(15, 27, 45, 0.04);
   background: #fff;
 }
 
 .day-column.is-today {
-  background: #f8fbff;
+  background: #fafcff;
 }
 
 .day-column.is-past {
-  background: #fafbfc;
+  background: #fafbfd;
 }
 
 .slot-grid {
@@ -1451,7 +1559,7 @@ onBeforeUnmount(() => {
 .slot-cell {
   width: 100%;
   border: 0;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid rgba(15, 27, 45, 0.04);
   background: transparent;
   cursor: crosshair;
   padding: 0;
@@ -1459,23 +1567,23 @@ onBeforeUnmount(() => {
 }
 
 .slot-cell.is-boundary {
-  border-bottom-color: #e2e8f0;
+  border-bottom-color: rgba(15, 27, 45, 0.07);
 }
 
 .slot-cell:first-child {
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid rgba(15, 27, 45, 0.07);
 }
 
 .slot-cell:hover:not(:disabled) {
-  background: rgba(59, 130, 246, 0.08);
+  background: rgba(45, 108, 223, 0.08);
 }
 
 .slot-cell.is-selected {
-  background: rgba(59, 130, 246, 0.18);
+  background: rgba(45, 108, 223, 0.16);
 }
 
 .slot-cell.is-reserved {
-  background: rgba(148, 163, 184, 0.2);
+  background: rgba(248, 250, 252, 0.9);
 }
 
 .slot-cell.is-past-slot {
@@ -1499,9 +1607,9 @@ onBeforeUnmount(() => {
 .event-block {
   position: absolute;
   border-radius: 8px;
-  background: #e2e8f0;
-  border: 1px solid #cbd5e1;
-  color: #1e293b;
+  background: #eef4fe;
+  border: 1px solid rgba(45, 108, 223, 0.18);
+  color: #2d6cdf;
   z-index: 2;
   display: flex;
   flex-direction: column;
@@ -1519,47 +1627,64 @@ onBeforeUnmount(() => {
 }
 
 .event-block:hover {
-  border-color: #94a3b8;
-  box-shadow: 0 4px 12px rgba(30, 41, 59, 0.14);
+  border-color: rgba(45, 108, 223, 0.4);
+  box-shadow: 0 4px 12px rgba(45, 108, 223, 0.18);
   transform: translateY(-1px);
 }
 
 .event-block:focus-visible {
-  outline: 2px solid rgba(37, 99, 235, 0.75);
+  outline: 2px solid rgba(45, 108, 223, 0.75);
   outline-offset: 1px;
 }
 
-.event-name {
-  font-size: 0.72rem;
+.open-slot-badge {
+  display: inline-block;
+  font-size: 9px;
   font-weight: 700;
-  line-height: 1.2;
+  color: #065f46;
+  background: rgba(16, 185, 129, 0.18);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 3px;
+  padding: 1px 4px;
+  line-height: 1.3;
+  white-space: nowrap;
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 1px;
+}
+
+.event-name {
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: #2d6cdf;
 }
 
 .event-time {
-  font-size: 0.66rem;
-  color: #475569;
-  line-height: 1.2;
+  font-size: 10.5px;
+  color: #5b6473;
+  line-height: 1.25;
 }
 
 .selection-block {
   position: absolute;
   left: 5px;
   right: 5px;
-  border-radius: 12px;
+  border-radius: 10px;
   z-index: 3;
 }
 
 .selection-block.confirmed {
-  background: rgba(59, 130, 246, 0.12);
-  border: 2px solid rgba(59, 130, 246, 0.52);
+  background: rgba(45, 108, 223, 0.12);
+  border: 2px solid rgba(45, 108, 223, 0.52);
 }
 
 .selection-block.preview {
-  background: rgba(59, 130, 246, 0.08);
-  border: 2px dashed rgba(59, 130, 246, 0.5);
+  background: rgba(45, 108, 223, 0.08);
+  border: 2px dashed rgba(45, 108, 223, 0.5);
   z-index: 4;
 }
 
@@ -1567,11 +1692,11 @@ onBeforeUnmount(() => {
   position: sticky;
   left: 0;
   bottom: 0;
-  padding: 0.45rem 0.6rem;
+  padding: 8px 12px;
   background: rgba(255, 255, 255, 0.96);
-  border-top: 1px solid #e5e7eb;
-  font-size: 0.78rem;
-  color: #475569;
+  border-top: 1px solid rgba(15, 27, 45, 0.07);
+  font-size: 12.5px;
+  color: #5b6473;
 }
 
 .booking-panel {
@@ -1593,54 +1718,84 @@ onBeforeUnmount(() => {
 
 .form-head h3 {
   margin: 0;
-  color: #0f172a;
-  font-size: 1.02rem;
+  color: #0f1b2d;
+  font-size: 18px;
+  font-weight: 700;
 }
 
 .field-group {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  margin-top: 0.75rem;
+  gap: 12px;
+  margin-top: 18px;
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 6px;
 }
 
 .label {
-  font-size: 0.84rem;
-  color: #334155;
+  font-size: 12.5px;
+  color: #5b6473;
   font-weight: 600;
 }
 
 .field-help {
-  margin: 0.35rem 0 0;
-  font-size: 0.74rem;
-  color: #5b6e86;
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #5b6473;
+  line-height: 1.55;
 }
 
 .field-help.is-error {
   color: #b91c1c;
 }
 
+.field-help-warn {
+  color: #b45309;
+  font-weight: 600;
+}
+
+.simultaneous-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.simultaneous-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #2d6cdf;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.simultaneous-label-text {
+  font-size: 14px;
+  color: #0f1b2d;
+  font-weight: 500;
+}
+
 .input,
 .select {
-  border: 1px solid #d7dfea;
-  padding: 0.62rem 0.7rem;
-  border-radius: 8px;
-  background: #fff;
-  font-size: 0.92rem;
-  color: #0f172a;
+  border: 1px solid rgba(15, 27, 45, 0.07);
+  padding: 0 14px;
+  height: 42px;
+  border-radius: 10px;
+  background: #fafbfd;
+  font-size: 14.5px;
+  color: #0f1b2d;
 }
 
 .input:focus,
 .select:focus {
   outline: none;
-  border-color: rgba(74, 144, 226, 0.55);
-  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.12);
+  border-color: rgba(45, 108, 223, 0.55);
+  box-shadow: 0 0 0 3px rgba(45, 108, 223, 0.12);
 }
 
 .feedback-banner {
@@ -1667,29 +1822,30 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.72rem 0.9rem;
-  border-radius: 8px;
-  border: 1px solid #1d4ed8;
-  background: #2563eb;
+  padding: 14px;
+  border-radius: 10px;
+  border: none;
+  background: #2d6cdf;
   color: #fff;
   cursor: pointer;
-  font-weight: 600;
-  font-size: 0.92rem;
+  font-weight: 700;
+  font-size: 15px;
   transition: background-color 0.12s ease;
+  box-shadow: 0 6px 18px -6px rgba(45, 108, 223, 0.5);
 }
 
 .btn-secondary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.72rem 0.9rem;
-  border-radius: 8px;
-  border: 1px solid #e11d48;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(225, 29, 72, 0.25);
   background: #fff;
   color: #be123c;
   cursor: pointer;
   font-weight: 600;
-  font-size: 0.92rem;
+  font-size: 14px;
   transition: background-color 0.12s ease;
 }
 
@@ -1698,12 +1854,12 @@ onBeforeUnmount(() => {
 }
 
 .btn-primary:hover {
-  background: #1d4ed8;
+  background: #1d57c4;
 }
 
 .btn-primary.wide {
   width: 100%;
-  margin-top: 0.9rem;
+  margin-top: 18px;
 }
 
 .btn-primary:disabled,
@@ -1713,6 +1869,11 @@ onBeforeUnmount(() => {
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+  background: #d1d9e6;
+}
+
+.btn-secondary:disabled {
+  background: #fff;
 }
 
 .reservation-modal-backdrop {
@@ -1731,6 +1892,7 @@ onBeforeUnmount(() => {
   max-height: calc(100vh - 60px);
   overflow-y: auto;
   background: #fff;
+  padding: 24px;
 }
 
 .reservation-modal-head {
@@ -1742,17 +1904,19 @@ onBeforeUnmount(() => {
 
 .reservation-modal-head h3 {
   margin: 0;
-  font-size: 1.06rem;
-  color: #0f172a;
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f1b2d;
 }
 
 .modal-close-btn {
-  border: 1px solid #d7dfea;
+  border: 1px solid rgba(15, 27, 45, 0.07);
   background: #fff;
-  color: #334155;
+  color: #5b6473;
   border-radius: 8px;
-  padding: 0.4rem 0.58rem;
-  font-size: 0.8rem;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -1769,12 +1933,14 @@ onBeforeUnmount(() => {
 
 .reservation-detail-list p {
   margin: 0;
-  font-size: 0.87rem;
-  color: #334155;
+  font-size: 13.5px;
+  color: #5b6473;
 }
 
 .reservation-detail-list strong {
-  color: #0f172a;
+  color: #0f1b2d;
+  font-weight: 700;
+  margin-right: 8px;
 }
 
 .modal-edit-group {
@@ -1789,23 +1955,14 @@ onBeforeUnmount(() => {
 }
 
 @media (min-width: 1181px) {
-  .layout {
-    max-width: 1600px;
-    padding: 0 28px;
-  }
-
   .workspace {
     flex-direction: row;
     align-items: flex-start;
-    gap: 14px;
-    padding: 6px 0 16px;
+    gap: 20px;
   }
 
   .schedule-panel {
     flex: 1 1 auto;
-    max-width: min(1260px, calc(100vw - 330px));
-    border-radius: 16px;
-    box-shadow: 0 14px 32px rgba(30, 73, 119, 0.1);
   }
 
   .week-scroller {
@@ -1825,54 +1982,12 @@ onBeforeUnmount(() => {
   }
 
   .booking-panel {
-    width: 250px;
-    min-width: 240px;
+    width: 320px;
+    min-width: 320px;
     border-top: 0;
     background: transparent;
     position: sticky;
-    top: 92px;
-  }
-
-  .booking-panel .card-panel {
-    padding: 0.8rem 0.85rem 0.9rem;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    background: #fff;
-    box-shadow: 0 12px 30px rgba(30, 73, 119, 0.1);
-  }
-
-  .form-head h3 {
-    font-size: 0.94rem;
-  }
-
-  .field-group {
-    gap: 0.62rem;
-    margin-top: 0.62rem;
-  }
-
-  .label {
-    font-size: 0.8rem;
-  }
-
-  .input,
-  .select {
-    padding: 0.52rem 0.62rem;
-    font-size: 0.86rem;
-    border-radius: 7px;
-  }
-
-  .btn-primary {
-    font-size: 0.86rem;
-    padding: 0.62rem 0.75rem;
-  }
-
-  .btn-secondary {
-    font-size: 0.86rem;
-    padding: 0.62rem 0.75rem;
-  }
-
-  .btn-primary.wide {
-    margin-top: 0.75rem;
+    top: 24px;
   }
 }
 
@@ -1885,8 +2000,28 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 960px) {
+  .reservation-page {
+    padding: 24px 0 36px;
+  }
+
   .layout {
-    padding: 0 14px;
+    padding: 0 16px;
+  }
+
+  .page-heading h1 {
+    font-size: 22px;
+  }
+
+  .page-heading p {
+    font-size: 13px;
+  }
+
+  .page-heading {
+    margin-bottom: 16px;
+  }
+
+  .workspace {
+    gap: 14px;
   }
 
   .form-head {
@@ -1905,77 +2040,81 @@ onBeforeUnmount(() => {
     justify-content: flex-start;
     flex-wrap: nowrap;
   }
+
+  .card-panel {
+    padding: 20px;
+  }
 }
 
 @media (max-width: 768px) {
-  .layout {
-    padding: 0 10px;
-  }
-
   .schedule-panel {
-    border-radius: 12px;
+    border-radius: 16px;
   }
 
   .card-panel {
-    border-radius: 12px;
-    padding: 0.85rem 0.8rem;
+    border-radius: 16px;
+  }
+
+  .schedule-head {
+    padding: 14px 16px;
   }
 
   .schedule-range {
-    font-size: 0.96rem;
+    font-size: 15px;
     white-space: nowrap;
   }
 
   .form-head h3 {
-    font-size: 0.94rem;
+    font-size: 16px;
     white-space: nowrap;
   }
 
   .week-scroller {
     min-height: 300px;
     height: 56vh;
-    border-radius: 0 0 12px 12px;
+    border-radius: 0 0 16px 16px;
   }
 
   .week-grid {
-    --time-col-width: 64px;
+    --time-col-width: 56px;
   }
 
   .corner-head,
   .day-head {
-    height: 38px;
+    height: 44px;
   }
 
   .day-display {
-    font-size: 0.74rem;
+    font-size: 12px;
   }
 
   .time-slot-label {
-    font-size: 0.62rem;
+    font-size: 10.5px;
   }
 
   .label {
-    font-size: 0.78rem;
+    font-size: 12px;
     white-space: nowrap;
   }
 
   .input,
   .select {
-    font-size: 0.86rem;
+    font-size: 14px;
+    height: 40px;
   }
 
   .today-btn {
-    font-size: 0.8rem;
+    font-size: 12.5px;
     white-space: nowrap;
   }
 
   .btn-primary {
-    font-size: 0.84rem;
+    font-size: 14.5px;
     white-space: nowrap;
   }
 
   .btn-secondary {
-    font-size: 0.84rem;
+    font-size: 14px;
     white-space: nowrap;
   }
 
@@ -1984,11 +2123,10 @@ onBeforeUnmount(() => {
   }
 
   .loading-overlay {
-    font-size: 0.72rem;
+    font-size: 11.5px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-
 }
 </style>

@@ -1,3 +1,5 @@
+import { supabase } from './supabaseClient'
+
 export interface ReservationSlot {
   id: string
   date: string // YYYY-MM-DD
@@ -7,6 +9,7 @@ export interface ReservationSlot {
   reservedBy: string | null
   startsAt: string
   endsAt: string
+  allowSimultaneous: boolean
 }
 
 type ReservationListOptions = {
@@ -24,6 +27,17 @@ export const generateTimeSlots = (): string[] => {
 }
 
 const API_BASE: string = (import.meta as any).env?.VITE_API_BASE ?? 'http://127.0.0.1:8000'
+
+const getAuthHeaders = async (): Promise<Record<string, string>> => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  if (!session?.access_token) throw new Error('로그인이 필요합니다.')
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${session.access_token}`,
+  }
+}
 const RANGE_CACHE_TTL_MS = 10_000
 
 const rangeCache = new Map<string, { expiresAt: number; data: Record<string, ReservationSlot[]> }>()
@@ -36,6 +50,7 @@ type ApiReservation = {
   starts_at: string // ISO
   ends_at: string // ISO
   debate_id?: string | null
+  allow_simultaneous?: boolean
 }
 
 type ReservationUpdatePayload = {
@@ -136,6 +151,7 @@ export const listReservationsByDate = async (
           reservedBy: r.reserved_by ?? null,
           startsAt: r.starts_at,
           endsAt: r.ends_at,
+          allowSimultaneous: r.allow_simultaneous ?? false,
         })
       }
     }
@@ -197,6 +213,7 @@ export const listReservationsByDateRange = async (
           reservedBy: r.reserved_by ?? null,
           startsAt: r.starts_at,
           endsAt: r.ends_at,
+          allowSimultaneous: r.allow_simultaneous ?? false,
         })
       }
     }
@@ -263,6 +280,7 @@ export const createReservations = async (
   debateId?: string | null,
   title?: string | null,
   reservedBy?: string | null,
+  allowSimultaneous?: boolean,
 ): Promise<void> => {
   const normalizedTitle = title?.trim() || null
   const normalizedReservedBy = reservedBy?.trim() || null
@@ -277,11 +295,13 @@ export const createReservations = async (
       ends_at: toIsoAt(date, end),
       debate_id: debateId || null,
       reserved_by: normalizedReservedBy,
+      allow_simultaneous: allowSimultaneous ?? false,
     }
     try {
+      const authHeaders = await getAuthHeaders()
       const res = await fetch(`${API_BASE}/reservations`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify(payload),
       })
       if (!res.ok) {
@@ -316,9 +336,10 @@ export const updateReservation = async (
     return
   }
 
+  const authHeaders = await getAuthHeaders()
   const res = await fetch(`${API_BASE}/reservations/${encodeURIComponent(reservationId)}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders,
     body: JSON.stringify({
       reserved_by_name: normalizedName,
       title: normalizedTitle,
@@ -337,8 +358,10 @@ export const deleteReservation = async (reservationId: string): Promise<void> =>
     return
   }
 
+  const authHeaders = await getAuthHeaders()
   const res = await fetch(`${API_BASE}/reservations/${encodeURIComponent(reservationId)}`, {
     method: 'DELETE',
+    headers: authHeaders,
   })
   if (!res.ok) {
     const msg = await res.text().catch(() => '')
@@ -368,6 +391,7 @@ const addMemoryReservation = (date: string, name: string, startTime: string, end
       reservedBy: null,
       startsAt,
       endsAt,
+      allowSimultaneous: false,
     })
   })
   memoryByDate.set(date, list)
