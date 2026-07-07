@@ -2,64 +2,24 @@
   <div class="login">
     <div class="login-container">
       <div class="login-header">
-        <h2>로그인 / 회원가입</h2>
-      </div>
-
-      <div class="mode-switch">
-        <button
-          type="button"
-          class="mode-btn"
-          :class="{ active: mode === 'signin' }"
-          @click="changeMode('signin')"
-        >
-          로그인
-        </button>
-        <button
-          type="button"
-          class="mode-btn"
-          :class="{ active: mode === 'signup' }"
-          @click="changeMode('signup')"
-        >
-          회원가입
-        </button>
+        <h2>로그인</h2>
+        <p>이름과 학번으로 로그인하세요</p>
       </div>
 
       <form @submit.prevent="submitAuth" class="auth-form">
-        <div v-if="mode === 'signup'" class="form-group">
+        <div class="form-group">
           <label for="name">이름</label>
           <input id="name" v-model="name" autocomplete="name" placeholder="예: 홍길동" required />
         </div>
 
-        <div v-if="mode === 'signup'" class="form-group">
+        <div class="form-group">
           <label for="student-id">학번</label>
           <input
             id="student-id"
             v-model="studentId"
-            autocomplete="off"
+            autocomplete="username"
+            inputmode="numeric"
             placeholder="예: 20241234"
-            required
-          />
-        </div>
-
-        <div v-if="mode === 'signup'" class="form-group">
-          <label for="major">학과</label>
-          <input
-            id="major"
-            v-model="major"
-            autocomplete="organization"
-            placeholder="예: 컴퓨터공학과"
-            required
-          />
-        </div>
-
-        <div class="form-group">
-          <label for="email">이메일</label>
-          <input
-            id="email"
-            v-model="email"
-            type="email"
-            autocomplete="email"
-            placeholder="name@example.com"
             required
           />
         </div>
@@ -71,39 +31,23 @@
             v-model="password"
             type="password"
             autocomplete="current-password"
-            placeholder="6자 이상 입력"
+            placeholder="최초 로그인 시 학번을 입력하세요"
             minlength="6"
             required
           />
         </div>
 
-        <div v-if="mode === 'signin'" class="forgot-wrap">
-          <button type="button" class="forgot-btn" @click="showResetPanel = !showResetPanel">
-            {{ showResetPanel ? '닫기' : '비밀번호를 잊으셨나요?' }}
-          </button>
-          <div v-if="showResetPanel" class="forgot-panel">
-            <p>입력한 이메일로 비밀번호 재설정 링크를 발송합니다.</p>
-            <button
-              type="button"
-              class="forgot-send-btn"
-              :disabled="sendingReset"
-              @click="submitPasswordReset"
-            >
-              {{ sendingReset ? '발송 중...' : '재설정 메일 보내기' }}
-            </button>
-          </div>
-        </div>
-
         <button class="submit-btn" type="submit" :disabled="submitting">
-          {{ submitting ? '처리 중...' : submitButtonText }}
+          {{ submitting ? '처리 중...' : '로그인' }}
         </button>
       </form>
 
       <p v-if="noticeMessage" class="notice-text">{{ noticeMessage }}</p>
       <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
       <p class="help-text">
-        회원가입 시 인증 메일이 발송되며, 메일 인증 완료 후 로그인할 수 있습니다.
-        관리자 계정은 동일한 로그인 화면에서 자동 인식됩니다.
+        회원 계정은 동아리 회원 명단에서 자동으로 등록됩니다. 최초 비밀번호는 본인 학번이며, 첫
+        로그인 후 반드시 새 비밀번호로 변경해야 합니다. 로그인에 문제가 있으면 관리자에게
+        문의해주세요.
       </p>
 
       <div class="back-home">
@@ -114,29 +58,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { sendPasswordResetEmail, signInWithEmail, signUpWithEmail, useAuth } from '@/lib/auth'
+import { signInWithNameAndStudentId, useAuth } from '@/lib/auth'
 
 const router = useRouter()
 const route = useRoute()
 const { isLoggedIn } = useAuth()
-const mode = ref<'signin' | 'signup'>('signin')
 const name = ref('')
 const studentId = ref('')
-const major = ref('')
-const email = ref('')
 const password = ref('')
-const showResetPanel = ref(false)
-const sendingReset = ref(false)
 const submitting = ref(false)
 const noticeMessage = ref('')
 const errorMessage = ref('')
-
-const submitButtonText = computed(() => {
-  if (mode.value === 'signup') return '회원가입'
-  return '로그인'
-})
 
 onMounted(() => {
   if (route.query.reset === 'done') {
@@ -147,53 +81,18 @@ onMounted(() => {
   }
 })
 
-function changeMode(nextMode: 'signin' | 'signup') {
-  mode.value = nextMode
-  showResetPanel.value = false
-  noticeMessage.value = ''
-  errorMessage.value = ''
-}
-
 function toFriendlyError(message: string): string {
-  if (!message) return '인증 처리 중 오류가 발생했습니다.'
+  if (!message) return '로그인 처리 중 오류가 발생했습니다.'
   if (/invalid login credentials/i.test(message)) {
-    return '이메일 또는 비밀번호가 올바르지 않습니다.'
+    return '비밀번호가 올바르지 않습니다. 최초 로그인이라면 학번을 비밀번호로 입력해주세요.'
   }
   if (/email not confirmed/i.test(message)) {
-    return '이메일 인증 완료 후 로그인해주세요.'
-  }
-  if (/user already registered/i.test(message)) {
-    return '이미 가입된 이메일입니다. 로그인으로 진행해주세요.'
-  }
-  if (/password should be at least/i.test(message)) {
-    return '비밀번호는 최소 6자 이상이어야 합니다.'
+    return '계정 상태에 문제가 있습니다. 관리자에게 문의해주세요.'
   }
   if (/security purposes/i.test(message) || /rate limit/i.test(message)) {
     return '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.'
   }
   return message
-}
-
-async function submitPasswordReset() {
-  noticeMessage.value = ''
-  errorMessage.value = ''
-
-  if (!email.value.trim()) {
-    errorMessage.value = '비밀번호 재설정 메일을 받을 이메일을 입력해주세요.'
-    return
-  }
-
-  sendingReset.value = true
-  try {
-    await sendPasswordResetEmail(email.value.trim())
-    noticeMessage.value = '비밀번호 재설정 메일을 보냈습니다. 메일의 링크를 눌러 비밀번호를 변경해주세요.'
-    showResetPanel.value = false
-    password.value = ''
-  } catch (error: any) {
-    errorMessage.value = toFriendlyError(error?.message ?? '')
-  } finally {
-    sendingReset.value = false
-  }
 }
 
 async function submitAuth() {
@@ -202,33 +101,12 @@ async function submitAuth() {
 
   submitting.value = true
   try {
-    if (!email.value.trim() || !password.value) {
-      errorMessage.value = '이메일과 비밀번호를 입력해주세요.'
-      return
+    const user = await signInWithNameAndStudentId(name.value, studentId.value, password.value)
+    if (user?.mustChangePassword) {
+      router.push('/change-password')
+    } else {
+      router.push('/home')
     }
-
-    if (mode.value === 'signup') {
-      const needsVerification = await signUpWithEmail(
-        email.value.trim(),
-        password.value,
-        {
-          name: name.value,
-          studentId: studentId.value,
-          major: major.value,
-        },
-      )
-      if (needsVerification) {
-        noticeMessage.value = '회원가입 완료: 인증 메일을 확인한 뒤 로그인해주세요.'
-        mode.value = 'signin'
-        password.value = ''
-      } else {
-        router.push('/home')
-      }
-      return
-    }
-
-    await signInWithEmail(email.value.trim(), password.value)
-    router.push('/home')
   } catch (error: any) {
     errorMessage.value = toFriendlyError(error?.message ?? '')
   } finally {
@@ -270,28 +148,6 @@ async function submitAuth() {
 .login-header p {
   color: #666;
   margin: 0;
-}
-
-.mode-switch {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 2rem;
-}
-
-.mode-btn {
-  flex: 1;
-  border: 1px solid #d1d5db;
-  background: #fff;
-  color: #4b5563;
-  border-radius: 8px;
-  padding: 0.65rem 0.75rem;
-  cursor: pointer;
-}
-
-.mode-btn.active {
-  background: var(--primary-blue);
-  border-color: var(--primary-blue);
-  color: #fff;
 }
 
 .auth-form {
@@ -339,53 +195,6 @@ async function submitAuth() {
   cursor: not-allowed;
 }
 
-.forgot-wrap {
-  margin: -0.25rem 0 1rem;
-}
-
-.forgot-btn {
-  border: none;
-  background: transparent;
-  color: #1f5ec8;
-  font-size: 0.88rem;
-  padding: 0;
-  cursor: pointer;
-}
-
-.forgot-btn:hover {
-  text-decoration: underline;
-}
-
-.forgot-panel {
-  margin-top: 0.65rem;
-  padding: 0.75rem;
-  border: 1px solid #d8e3f7;
-  background: #f8fbff;
-  border-radius: 10px;
-}
-
-.forgot-panel p {
-  margin: 0 0 0.55rem;
-  color: #3d4f72;
-  font-size: 0.85rem;
-}
-
-.forgot-send-btn {
-  border: 1px solid #9ab7eb;
-  border-radius: 8px;
-  padding: 0.5rem 0.65rem;
-  background: #fff;
-  color: #144a9e;
-  font-size: 0.86rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.forgot-send-btn:disabled {
-  opacity: 0.65;
-  cursor: not-allowed;
-}
-
 .help-text {
   color: #666;
   font-size: 0.9rem;
@@ -417,4 +226,4 @@ async function submitAuth() {
 .back-btn:hover {
   text-decoration: underline;
 }
-</style> 
+</style>

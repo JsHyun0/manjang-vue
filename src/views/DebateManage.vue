@@ -19,7 +19,9 @@
           <p>새 토론 생성, 기존 토론 수정/삭제를 수행할 수 있습니다.</p>
         </div>
         <div class="head-actions">
-          <button type="button" class="btn ghost" :disabled="loading" @click="loadDebates">새로고침</button>
+          <button type="button" class="btn ghost" :disabled="loading" @click="loadDebates">
+            새로고침
+          </button>
           <router-link class="btn ghost" to="/record">토론 목록</router-link>
         </div>
       </section>
@@ -47,6 +49,15 @@
           </div>
 
           <label>
+            <span>승리 진영 (토론 종료 후 기록)</span>
+            <select v-model="form.winnerSide">
+              <option value="">미기록</option>
+              <option value="pro">찬성 승</option>
+              <option value="con">반대 승</option>
+            </select>
+          </label>
+
+          <label>
             <span>영상 URL (선택)</span>
             <input
               v-model="form.videoUrl"
@@ -63,7 +74,12 @@
             </div>
 
             <div class="side-panels">
-              <section v-for="side in participantSides" :key="side.key" class="side-panel" :class="side.key">
+              <section
+                v-for="side in participantSides"
+                :key="side.key"
+                class="side-panel"
+                :class="side.key"
+              >
                 <div class="side-title">
                   <h3>{{ side.label }}</h3>
                   <span>{{ form.participantsBySide[side.key].length }}명</span>
@@ -88,11 +104,15 @@
                   </button>
                 </div>
 
-                <p class="helper">회원 DB에서 이름 검색 후 선택하거나, 후보가 없으면 직접 추가하세요.</p>
+                <p class="helper">
+                  회원 DB에서 이름 검색 후 선택하거나, 후보가 없으면 직접 추가하세요.
+                </p>
 
                 <div v-if="participantQuery[side.key].trim()" class="candidate-box">
                   <p v-if="candidateLoading[side.key]" class="candidate-state">검색 중...</p>
-                  <p v-else-if="candidateError[side.key]" class="candidate-state error">{{ candidateError[side.key] }}</p>
+                  <p v-else-if="candidateError[side.key]" class="candidate-state error">
+                    {{ candidateError[side.key] }}
+                  </p>
                   <ul v-else-if="candidateItems[side.key].length > 0" class="candidate-list">
                     <li v-for="candidate in candidateItems[side.key]" :key="candidate.id">
                       <button
@@ -102,15 +122,22 @@
                         @click="addCandidateParticipant(side.key, candidate)"
                       >
                         <strong>{{ candidate.name }}</strong>
-                        <span>{{ candidate.studentId || '학번 미입력' }} · {{ candidate.major || '학과 미입력' }}</span>
+                        <span
+                          >{{ candidate.studentId || '학번 미입력' }} ·
+                          {{ candidate.major || '학과 미입력' }}</span
+                        >
                       </button>
                     </li>
                   </ul>
-                  <p v-else class="candidate-state">검색 결과가 없습니다. 그대로 직접 추가할 수 있습니다.</p>
+                  <p v-else class="candidate-state">
+                    검색 결과가 없습니다. 그대로 직접 추가할 수 있습니다.
+                  </p>
                 </div>
 
                 <div class="added-list">
-                  <p v-if="form.participantsBySide[side.key].length === 0" class="empty-added">아직 등록된 참가자가 없습니다.</p>
+                  <p v-if="form.participantsBySide[side.key].length === 0" class="empty-added">
+                    아직 등록된 참가자가 없습니다.
+                  </p>
                   <div v-else class="added-chips">
                     <div
                       v-for="(participant, index) in form.participantsBySide[side.key]"
@@ -138,7 +165,9 @@
           </label>
 
           <div class="form-actions">
-            <button type="button" class="btn ghost" :disabled="submitting" @click="resetForm">초기화</button>
+            <button type="button" class="btn ghost" :disabled="submitting" @click="resetForm">
+              초기화
+            </button>
             <button type="submit" class="btn primary" :disabled="submitting">
               {{ submitting ? '저장 중...' : editingId ? '수정 저장' : '토론 생성' }}
             </button>
@@ -166,13 +195,17 @@
                 <span class="chip status" :class="debateStatus(debate.date)">
                   {{ debateStatus(debate.date) === 'upcoming' ? '예정' : '완료' }}
                 </span>
+                <span v-if="debate.winnerSide" class="chip winner" :class="debate.winnerSide">
+                  {{ debate.winnerSide === 'pro' ? '찬성 승' : '반대 승' }}
+                </span>
               </div>
               <time>{{ formatDate(debate.date) }}</time>
             </div>
 
             <h3>{{ debate.topic }}</h3>
             <p class="meta">
-              참가자 {{ debate.participants.length }}명 · 찬성 {{ debate.participantsBySide.pro.length }}명 · 반대
+              참가자 {{ debate.participants.length }}명 · 찬성
+              {{ debate.participantsBySide.pro.length }}명 · 반대
               {{ debate.participantsBySide.con.length }}명
             </p>
 
@@ -180,7 +213,10 @@
               <div class="side-preview-row">
                 <span class="side-badge pro">찬성</span>
                 <div class="participants">
-                  <span v-for="name in previewParticipantsBySide(debate, 'pro')" :key="`${debate.id}-pro-${name}`">
+                  <span
+                    v-for="name in previewParticipantsBySide(debate, 'pro')"
+                    :key="`${debate.id}-pro-${name}`"
+                  >
                     {{ name }}
                   </span>
                   <span v-if="overflowParticipantsBySide(debate, 'pro') > 0" class="more">
@@ -192,7 +228,10 @@
               <div class="side-preview-row">
                 <span class="side-badge con">반대</span>
                 <div class="participants">
-                  <span v-for="name in previewParticipantsBySide(debate, 'con')" :key="`${debate.id}-con-${name}`">
+                  <span
+                    v-for="name in previewParticipantsBySide(debate, 'con')"
+                    :key="`${debate.id}-con-${name}`"
+                  >
                     {{ name }}
                   </span>
                   <span v-if="overflowParticipantsBySide(debate, 'con') > 0" class="more">
@@ -206,7 +245,9 @@
 
             <div class="card-actions">
               <button type="button" class="btn ghost" @click="startEdit(debate)">수정</button>
-              <button type="button" class="btn danger" @click="removeDebate(debate.id)">삭제</button>
+              <button type="button" class="btn danger" @click="removeDebate(debate.id)">
+                삭제
+              </button>
             </div>
           </article>
         </div>
@@ -263,6 +304,7 @@ const buildEmptyForm = () => ({
   date: '',
   debateType: '자유토론' as DebateType,
   videoUrl: '',
+  winnerSide: '' as '' | DebateSide,
   participantsBySide: {
     pro: [],
     con: [],
@@ -314,7 +356,11 @@ const clearAllCandidateState = () => {
   participantQuery.con = ''
 }
 
-const participantChipKey = (side: DebateSide, participant: FormParticipant, index: number): string => {
+const participantChipKey = (
+  side: DebateSide,
+  participant: FormParticipant,
+  index: number,
+): string => {
   return `${side}-${participant.userId ?? 'manual'}-${participant.name}-${index}`
 }
 
@@ -480,6 +526,7 @@ const fillForm = (debate: DebateAdminItem) => {
     date: debate.date,
     debateType: debate.debateType,
     videoUrl: debate.videoUrl ?? '',
+    winnerSide: debate.winnerSide ?? '',
     participantsBySide: {
       pro: nextPro,
       con: nextCon,
@@ -569,6 +616,7 @@ const submitForm = async () => {
       },
       notes: form.value.notes,
       videoUrl: form.value.videoUrl,
+      winnerSide: form.value.winnerSide || null,
     }
 
     if (editingId.value) {
@@ -1075,6 +1123,18 @@ textarea:focus {
   background: #f0f3f6;
   color: #5b6773;
   border: 1px solid #d9e0e7;
+}
+
+.chip.winner.pro {
+  background: #e8f1ff;
+  color: #255d93;
+  border: 1px solid #c1d7ef;
+}
+
+.chip.winner.con {
+  background: #ffecec;
+  color: #8f3a3a;
+  border: 1px solid #f1c7c7;
 }
 
 .card time {

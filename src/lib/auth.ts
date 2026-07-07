@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js'
 import { supabase } from './supabaseClient'
+import { lookupLoginEmail } from './members'
 
 type AuthRole = 'member' | 'admin'
 type AuthProvider = 'supabase'
@@ -13,6 +14,7 @@ type AuthUser = {
   major: string
   role: AuthRole
   provider: AuthProvider
+  mustChangePassword: boolean
 }
 
 type PublicUserRow = {
@@ -22,28 +24,12 @@ type PublicUserRow = {
   student_id: string | null
   major: string | null
   role: string | null
+  must_change_password: boolean | null
 }
 
 const userRef = ref<AuthUser | null>(null)
 const readyRef = ref(false)
 let initPromise: Promise<void> | null = null
-
-const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, '')
-
-const getAuthRedirectUrl = (path: '/login' | '/reset-password'): string => {
-  const configuredBase = import.meta.env.VITE_PUBLIC_SITE_URL?.trim()
-  const base =
-    configuredBase && configuredBase.length > 0
-      ? trimTrailingSlash(configuredBase)
-      : window.location.origin
-  return `${base}${path}`
-}
-
-const isExistingEmailSignUpResponse = (user: User | null, hasSession: boolean): boolean => {
-  if (hasSession || !user || !Array.isArray(user.identities)) return false
-  // Supabase may return an obfuscated user with empty identities when the email already exists.
-  return user.identities.length === 0
-}
 
 const normalizeRole = (value: string | null | undefined): AuthRole => {
   return value === 'admin' ? 'admin' : 'member'
@@ -78,13 +64,14 @@ const toFallbackUser = (user: User): AuthUser => {
     major: readMetadataField(user, 'major'),
     role: 'member',
     provider: 'supabase',
+    mustChangePassword: false,
   }
 }
 
 const readPublicUser = async (userId: string): Promise<PublicUserRow | null> => {
   const { data, error } = await supabase
     .from('users')
-    .select('id,email,name,student_id,major,role')
+    .select('id,email,name,student_id,major,role,must_change_password')
     .eq('id', userId)
     .maybeSingle()
 
@@ -111,6 +98,7 @@ const toMappedUser = async (user: User | null): Promise<AuthUser | null> => {
     major: profile.major?.trim() || fallback.major,
     role: normalizeRole(profile.role),
     provider: 'supabase',
+    mustChangePassword: profile.must_change_password === true,
   }
 }
 
@@ -137,58 +125,18 @@ supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | nul
   void syncAuthUser(session?.user ?? null)
 })
 
-type SignUpProfile = {
-  name: string
-  studentId: string
-  major: string
-}
-
-export async function signUpWithEmail(
-  email: string,
+export async function signInWithNameAndStudentId(
+  name: string,
+  studentId: string,
   password: string,
-  profile: SignUpProfile,
-): Promise<boolean> {
-  const cleanName = profile.name.trim()
-  const cleanStudentId = profile.studentId.trim()
-  const cleanMajor = profile.major.trim()
-
-  if (!cleanName || !cleanStudentId || !cleanMajor) {
-    throw new Error('이름, 학번, 학과를 모두 입력해주세요.')
+): Promise<AuthUser | null> {
+  const cleanName = name.trim()
+  const cleanStudentId = studentId.trim()
+  if (!cleanName || !cleanStudentId || !password) {
+    throw new Error('이름, 학번, 비밀번호를 모두 입력해주세요.')
   }
 
-  const options: {
-    emailRedirectTo: string
-    data: { name: string; student_id: string; sid: string; major: string }
-  } = {
-    emailRedirectTo: getAuthRedirectUrl('/login'),
-    data: {
-      name: cleanName,
-      student_id: cleanStudentId,
-      sid: cleanStudentId,
-      major: cleanMajor,
-    },
-  }
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options,
-  })
-  if (error) throw error
-
-  const hasSession = !!data.session
-  if (isExistingEmailSignUpResponse(data.user ?? null, hasSession)) {
-    throw new Error('이미 가입된 이메일입니다. 로그인으로 진행해주세요.')
-  }
-  if (!data.user && !hasSession) {
-    throw new Error('회원가입 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
-  }
-
-  userRef.value = hasSession ? await toMappedUser(data.user ?? null) : null
-  readyRef.value = true
-  return !hasSession
-}
-
-export async function signInWithEmail(email: string, password: string): Promise<void> {
+  const email = await lookupLoginEmail(cleanName, cleanStudentId)
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
@@ -196,18 +144,14 @@ export async function signInWithEmail(email: string, password: string): Promise<
   if (error) throw error
   userRef.value = await toMappedUser(data.user ?? null)
   readyRef.value = true
+  return userRef.value
 }
 
-export async function sendPasswordResetEmail(email: string): Promise<void> {
-  const cleanEmail = email.trim()
-  if (!cleanEmail) {
-    throw new Error('비밀번호 재설정 메일을 받을 이메일을 입력해주세요.')
+/** 비밀번호 변경 완료 후 로컬 상태의 변경 요구 플래그를 해제합니다. */
+export function markPasswordChanged(): void {
+  if (userRef.value) {
+    userRef.value = { ...userRef.value, mustChangePassword: false }
   }
-
-  const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-    redirectTo: getAuthRedirectUrl('/reset-password'),
-  })
-  if (error) throw error
 }
 
 export async function updatePasswordWithRecovery(newPassword: string): Promise<void> {
@@ -242,6 +186,7 @@ export function useAuth() {
   const userRole = computed<AuthRole>(() => userRef.value?.role ?? 'member')
   const authProvider = computed<AuthProvider>(() => userRef.value?.provider ?? 'supabase')
   const isAuthReady = computed(() => readyRef.value)
+  const mustChangePassword = computed(() => userRef.value?.mustChangePassword === true)
 
   return {
     user: userRef,
@@ -254,5 +199,6 @@ export function useAuth() {
     userRole,
     authProvider,
     isAuthReady,
+    mustChangePassword,
   }
 }

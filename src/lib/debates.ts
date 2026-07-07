@@ -35,6 +35,7 @@ export type DebateListItem = {
   date: string // YYYY-MM-DD
   debateType: DebateType
   videoUrl: string
+  winnerSide: DebateSide | null
 }
 
 export type DebateAdminItem = DebateListItem & {
@@ -49,6 +50,7 @@ export type DebateUpsertInput = {
   participantsBySide: DebateParticipantsBySide<DebateParticipantInput>
   notes?: string
   videoUrl?: string
+  winnerSide?: DebateSide | null
 }
 
 export type MemberSearchCandidate = {
@@ -66,6 +68,7 @@ type DebateRow = {
   notes?: string | null
   debate_type?: string | null
   participant_names?: string[] | null
+  winner_side?: string | null
 }
 
 type DebateParticipantRow = {
@@ -161,7 +164,9 @@ const normalizeVideoUrl = (rawValue: string | null | undefined): string => {
 
 const buildMetaLine = (meta: LegacyMeta): string => `${LEGACY_META_PREFIX}${JSON.stringify(meta)}`
 
-const parseLegacyMeta = (rawNotes: string | null | undefined): { notes: string; meta: LegacyMeta } => {
+const parseLegacyMeta = (
+  rawNotes: string | null | undefined,
+): { notes: string; meta: LegacyMeta } => {
   const notes = (rawNotes ?? '').trim()
   if (!notes) return { notes: '', meta: {} }
 
@@ -221,10 +226,14 @@ const normalizeInputParticipants = (
   return out
 }
 
-const entriesToBySideNames = (entries: DebateParticipantEntry[]): DebateParticipantsBySide<string> => {
+const entriesToBySideNames = (
+  entries: DebateParticipantEntry[],
+): DebateParticipantsBySide<string> => {
   const grouped = emptyBySide<string>()
   for (const side of SIDES) {
-    grouped[side] = cleanNameArray(entries.filter((entry) => entry.side === side).map((entry) => entry.name))
+    grouped[side] = cleanNameArray(
+      entries.filter((entry) => entry.side === side).map((entry) => entry.name),
+    )
   }
   return grouped
 }
@@ -272,7 +281,9 @@ const legacyEntriesToBySide = (meta: LegacyMeta): DebateParticipantEntry[] => {
   }
   if (fromBySide.length > 0) return fromBySide
 
-  const fallback = Array.isArray(meta.participants) ? cleanNameArray(meta.participants.map((v) => String(v))) : []
+  const fallback = Array.isArray(meta.participants)
+    ? cleanNameArray(meta.participants.map((v) => String(v)))
+    : []
   return fallback.map((name) => ({
     name,
     side: 'pro',
@@ -296,7 +307,9 @@ const mergeEntries = (
     const targetIndex = merged.findIndex((entry) => {
       if (incoming.userId && entry.userId) return incoming.userId === entry.userId
       if (incoming.userId || entry.userId) return false
-      return incoming.side === entry.side && incoming.name.toLowerCase() === entry.name.toLowerCase()
+      return (
+        incoming.side === entry.side && incoming.name.toLowerCase() === entry.name.toLowerCase()
+      )
     })
 
     if (targetIndex < 0) {
@@ -321,7 +334,10 @@ const mergeEntries = (
 
 const detectExtendedColumns = async (): Promise<boolean> => {
   if (supportsExtendedColumns !== null) return supportsExtendedColumns
-  const { error } = await supabase.from('debates').select('id,debate_type,participant_names').limit(1)
+  const { error } = await supabase
+    .from('debates')
+    .select('id,debate_type,participant_names')
+    .limit(1)
   if (!error) {
     supportsExtendedColumns = true
     return true
@@ -340,7 +356,10 @@ const detectExtendedColumns = async (): Promise<boolean> => {
 const detectParticipantNameColumn = async (): Promise<boolean> => {
   if (supportsParticipantNameColumn !== null) return supportsParticipantNameColumn
 
-  const { error } = await supabase.from('debate_participants').select('id,participant_name').limit(1)
+  const { error } = await supabase
+    .from('debate_participants')
+    .select('id,participant_name')
+    .limit(1)
   if (!error) {
     supportsParticipantNameColumn = true
     return true
@@ -356,15 +375,14 @@ const fetchUsersByIds = async (userIds: string[]): Promise<Map<string, UserRow>>
   const usersById = new Map<string, UserRow>()
   if (userIds.length === 0) return usersById
 
-  const queryUsers = async (withGeneration: boolean): Promise<{ data: UserRow[] | null; error: any }> => {
+  const queryUsers = async (
+    withGeneration: boolean,
+  ): Promise<{ data: UserRow[] | null; error: any }> => {
     const selectColumns = withGeneration
       ? 'id,name,email,major,student_id,generation'
       : 'id,name,email,major,student_id'
 
-    const { data, error } = await supabase
-      .from('users')
-      .select(selectColumns)
-      .in('id', userIds)
+    const { data, error } = await supabase.from('users').select(selectColumns).in('id', userIds)
 
     return {
       data: (data as UserRow[] | null) ?? null,
@@ -423,11 +441,7 @@ const getParticipantEntriesByDebateId = async (
 
   const rows = (participantRows ?? []) as unknown as DebateParticipantRow[]
   const userIds = Array.from(
-    new Set(
-      rows
-        .map((row) => row.user_id?.trim() || '')
-        .filter((id) => !!id),
-    ),
+    new Set(rows.map((row) => row.user_id?.trim() || '').filter((id) => !!id)),
   )
 
   const usersById = await fetchUsersByIds(userIds)
@@ -468,7 +482,10 @@ const getParticipantEntriesByDebateId = async (
 }
 
 const listDebateRows = async (): Promise<DebateRow[]> => {
-  const { data, error } = await supabase.from('debates').select('*').order('debate_date', { ascending: true })
+  const { data, error } = await supabase
+    .from('debates')
+    .select('*')
+    .order('debate_date', { ascending: true })
   if (error) throw new Error(error.message || '토론 목록을 불러오지 못했습니다.')
   return (data ?? []) as DebateRow[]
 }
@@ -481,7 +498,11 @@ const buildEntriesFromRow = (
   const legacyEntries = legacyEntriesToBySide(meta)
   let baseEntries = legacyEntries
 
-  if (baseEntries.length === 0 && Array.isArray(row.participant_names) && row.participant_names.length > 0) {
+  if (
+    baseEntries.length === 0 &&
+    Array.isArray(row.participant_names) &&
+    row.participant_names.length > 0
+  ) {
     baseEntries = cleanNameArray(row.participant_names.map((v) => String(v))).map((name) => ({
       name,
       side: 'pro',
@@ -515,7 +536,10 @@ const toLegacyMetaFromEntries = (
   }
 }
 
-const syncDebateParticipants = async (debateId: string, entries: DebateParticipantEntry[]): Promise<void> => {
+const syncDebateParticipants = async (
+  debateId: string,
+  entries: DebateParticipantEntry[],
+): Promise<void> => {
   try {
     await supabase.from('debate_participants').delete().eq('debate_id', debateId)
 
@@ -586,6 +610,7 @@ const mapDebates = async (rows: DebateRow[]): Promise<DebateAdminItem[]> => {
       date: row.debate_date,
       debateType: inferDebateType(row, meta),
       videoUrl: normalizeVideoUrl(meta.videoUrl),
+      winnerSide: row.winner_side === 'pro' || row.winner_side === 'con' ? row.winner_side : null,
       participants: flattenBySideNames(participantsBySide),
       participantsBySide,
       participantEntries,
@@ -618,11 +643,15 @@ const buildDebatePayload = async (
   entries: DebateParticipantEntry[],
   notes: string,
   videoUrl: string,
+  winnerSide: DebateSide | null,
 ): Promise<Record<string, any>> => {
   const hasExtended = await detectExtendedColumns()
   const participantsBySide = entriesToBySideNames(entries)
   const flattened = flattenBySideNames(participantsBySide)
-  const storedNotes = buildStoredNotes(notes, toLegacyMetaFromEntries(debateType, entries, videoUrl))
+  const storedNotes = buildStoredNotes(
+    notes,
+    toLegacyMetaFromEntries(debateType, entries, videoUrl),
+  )
 
   if (hasExtended) {
     return {
@@ -631,6 +660,7 @@ const buildDebatePayload = async (
       debate_type: debateType,
       participant_names: flattened,
       notes: storedNotes,
+      winner_side: winnerSide,
     }
   }
 
@@ -638,6 +668,7 @@ const buildDebatePayload = async (
     topic_text: topic,
     debate_date: date,
     notes: storedNotes,
+    winner_side: winnerSide,
   }
 }
 
@@ -652,7 +683,15 @@ export const createDebateItem = async (input: DebateUpsertInput): Promise<void> 
   if (rawVideoUrl && !videoUrl) throw new Error('영상 URL 형식이 올바르지 않습니다.')
 
   const entries = normalizeUpsertEntries(input)
-  const payload = await buildDebatePayload(topic, date, input.debateType, entries, notes, videoUrl)
+  const payload = await buildDebatePayload(
+    topic,
+    date,
+    input.debateType,
+    entries,
+    notes,
+    videoUrl,
+    input.winnerSide ?? null,
+  )
 
   const { data, error } = await supabase.from('debates').insert(payload).select('id').single()
   if (error) throw new Error(error.message || '토론 생성에 실패했습니다.')
@@ -674,7 +713,15 @@ export const updateDebateItem = async (id: string, input: DebateUpsertInput): Pr
   if (rawVideoUrl && !videoUrl) throw new Error('영상 URL 형식이 올바르지 않습니다.')
 
   const entries = normalizeUpsertEntries(input)
-  const payload = await buildDebatePayload(topic, date, input.debateType, entries, notes, videoUrl)
+  const payload = await buildDebatePayload(
+    topic,
+    date,
+    input.debateType,
+    entries,
+    notes,
+    videoUrl,
+    input.winnerSide ?? null,
+  )
 
   const { error } = await supabase.from('debates').update(payload).eq('id', id)
   if (error) throw new Error(error.message || '토론 수정에 실패했습니다.')
@@ -697,7 +744,10 @@ const mapToCandidate = (row: UserRow): MemberSearchCandidate => {
   }
 }
 
-const queryMemberCandidates = async (keyword: string, limit: number): Promise<MemberSearchCandidate[]> => {
+const queryMemberCandidates = async (
+  keyword: string,
+  limit: number,
+): Promise<MemberSearchCandidate[]> => {
   const withGeneration = supportsUserGenerationColumn !== false
   const selectColumns = withGeneration
     ? 'id,name,email,major,student_id,generation'

@@ -1,344 +1,472 @@
 <template>
   <div class="debate-page">
     <header class="page-heading">
-      <h1>토론 목록</h1>
-      <p>예정된 토론과 지난 토론 기록을 확인하세요.</p>
+      <h1>토론 기록</h1>
+      <p>예정된 토론, 지난 토론 기록과 회원 전적을 확인하세요.</p>
     </header>
 
-    <section class="control-panel">
-      <label class="search-box">
-        <span class="search-label">검색</span>
-        <div class="search-input-wrap">
-          <span class="search-icon" aria-hidden="true">🔍</span>
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="논제 또는 참가자 검색"
-            autocomplete="off"
-          />
-        </div>
-      </label>
+    <div class="view-tabs">
+      <button
+        type="button"
+        class="view-tab"
+        :class="{ active: viewMode === 'debates' }"
+        @click="viewMode = 'debates'"
+      >
+        토론 목록
+      </button>
+      <button
+        type="button"
+        class="view-tab"
+        :class="{ active: viewMode === 'stats' }"
+        @click="openStats"
+      >
+        회원 전적
+      </button>
+    </div>
 
-      <div class="filter-tabs">
-        <button
-          type="button"
-          class="tab-btn"
-          :class="{ active: statusFilter === 'all' }"
-          @click="statusFilter = 'all'"
-        >
-          전체
-        </button>
-        <button
-          type="button"
-          class="tab-btn"
-          :class="{ active: statusFilter === 'upcoming' }"
-          @click="statusFilter = 'upcoming'"
-        >
-          예정
-        </button>
-        <button
-          type="button"
-          class="tab-btn"
-          :class="{ active: statusFilter === 'completed' }"
-          @click="statusFilter = 'completed'"
-        >
-          완료
+    <section v-if="viewMode === 'stats'" class="stats-section">
+      <div class="control-panel">
+        <label class="search-box">
+          <span class="search-label">회원 검색</span>
+          <div class="search-input-wrap">
+            <span class="search-icon" aria-hidden="true">🔍</span>
+            <input
+              v-model="statsQuery"
+              type="text"
+              placeholder="이름, 기수, 학과 검색"
+              autocomplete="off"
+            />
+          </div>
+        </label>
+        <button type="button" class="retry-btn small" :disabled="statsLoading" @click="loadStats">
+          새로고침
         </button>
       </div>
 
-      <label class="sort-box">
-        <span>정렬</span>
-        <select v-model="sortBy">
-          <option value="date-asc">날짜 오름차순</option>
-          <option value="date-desc">날짜 내림차순</option>
-        </select>
-      </label>
+      <section v-if="statsLoading" class="loading-state">
+        <h2>전적을 불러오는 중입니다</h2>
+        <p>잠시만 기다려주세요.</p>
+      </section>
 
-      <div v-if="isAdmin" class="manage-box">
-        <button type="button" class="manage-btn" @click="goToCreatePage">토론 등록</button>
+      <section v-else-if="statsError" class="error-state">
+        <h2>전적을 불러오지 못했습니다</h2>
+        <p>{{ statsError }}</p>
+        <button type="button" class="retry-btn" @click="loadStats">다시 불러오기</button>
+      </section>
+
+      <section v-else-if="filteredStats.length === 0" class="empty-state">
+        <h2>조건에 맞는 회원이 없습니다</h2>
+        <p>검색어를 조정해 다시 확인해보세요.</p>
+      </section>
+
+      <div v-else class="stats-table-wrap">
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th class="rank-col">순위</th>
+              <th>이름</th>
+              <th>기수</th>
+              <th>승</th>
+              <th>패</th>
+              <th>승률</th>
+              <th>참여</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(row, index) in filteredStats" :key="row.user_id">
+              <td class="rank-col">
+                <span class="rank-badge" :class="rankClass(index)">{{ index + 1 }}</span>
+              </td>
+              <td class="name-col">
+                {{ row.name }}
+                <small v-if="row.major">{{ row.major }}</small>
+              </td>
+              <td>{{ row.generation || '-' }}</td>
+              <td class="win-col">{{ row.wins }}</td>
+              <td class="loss-col">{{ row.losses }}</td>
+              <td>{{ winRateLabel(row) }}</td>
+              <td>{{ row.total }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </section>
 
-    <section v-if="loading" class="loading-state">
-      <h2>토론 목록을 불러오는 중입니다</h2>
-      <p>잠시만 기다려주세요.</p>
-    </section>
+    <template v-if="viewMode === 'debates'">
+      <section class="control-panel">
+        <label class="search-box">
+          <span class="search-label">검색</span>
+          <div class="search-input-wrap">
+            <span class="search-icon" aria-hidden="true">🔍</span>
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="논제 또는 참가자 검색"
+              autocomplete="off"
+            />
+          </div>
+        </label>
 
-    <section v-else-if="loadError" class="error-state">
-      <h2>토론 목록을 불러오지 못했습니다</h2>
-      <p>{{ loadError }}</p>
-      <button type="button" class="retry-btn" @click="loadDebates">다시 불러오기</button>
-    </section>
-
-    <section v-else-if="!hasAnyResult" class="empty-state">
-      <h2>조건에 맞는 토론이 없습니다</h2>
-      <p>검색어 또는 필터를 조정해 다시 확인해보세요.</p>
-    </section>
-
-    <template v-else>
-      <section v-if="statusFilter === 'all'" class="list-section">
-        <div class="section-head">
-          <h2>예정된 토론</h2>
-          <span>{{ upcomingDebates.length }}건</span>
-        </div>
-        <div v-if="upcomingDebates.length > 0" class="debate-grid">
-          <article
-            v-for="debate in upcomingDebates"
-            :key="debate.id"
-            class="debate-card upcoming"
+        <div class="filter-tabs">
+          <button
+            type="button"
+            class="tab-btn"
+            :class="{ active: statusFilter === 'all' }"
+            @click="statusFilter = 'all'"
           >
-            <div class="card-top">
-              <div class="card-badges">
-                <span class="status-chip upcoming">예정</span>
-                <span class="type-chip" :class="debateTypeClass(debate.debateType)">
-                  {{ debate.debateType }}
-                </span>
-              </div>
-              <time>{{ formatDate(debate.date) }}</time>
-            </div>
-            <h3>{{ debate.topic }}</h3>
-            <p class="card-meta">
-              {{ dateDistanceLabel(debate.date) }} · 찬성 {{ debate.participantsBySide.pro.length }}명 · 반대
-              {{ debate.participantsBySide.con.length }}명
-            </p>
-            <div class="side-participants">
-              <div class="side-row">
-                <span class="side-pill pro">찬성</span>
-                <div class="participants">
-                  <span v-for="name in participantPreviewBySide(debate, 'pro')" :key="`${debate.id}-pro-${name}`">
-                    {{ name }}
-                  </span>
-                  <span v-if="participantOverflowBySide(debate, 'pro') > 0" class="overflow">
-                    +{{ participantOverflowBySide(debate, 'pro') }}
-                  </span>
-                </div>
-              </div>
-              <div class="side-row">
-                <span class="side-pill con">반대</span>
-                <div class="participants">
-                  <span v-for="name in participantPreviewBySide(debate, 'con')" :key="`${debate.id}-con-${name}`">
-                    {{ name }}
-                  </span>
-                  <span v-if="participantOverflowBySide(debate, 'con') > 0" class="overflow">
-                    +{{ participantOverflowBySide(debate, 'con') }}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div v-if="debate.videoUrl || isAdmin" class="card-footer">
-              <a
-                v-if="debate.videoUrl"
-                class="video-link-btn"
-                :href="debate.videoUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-                title="토론 영상 열기"
-                aria-label="토론 영상 열기"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M14 3h7v7" />
-                  <path d="M10 14 21 3" />
-                  <path d="M21 14v5a2 2 0 0 1-2 2h-5" />
-                  <path d="M10 3H5a2 2 0 0 0-2 2v5" />
-                  <path d="M3 21 14 10" />
-                </svg>
-              </a>
-
-              <div v-if="isAdmin" class="card-actions">
-                <button type="button" class="card-action-btn ghost" @click="goToEditPage(debate.id)">
-                  수정
-                </button>
-                <button
-                  type="button"
-                  class="card-action-btn danger"
-                  :disabled="deletingId === debate.id"
-                  @click="removeDebate(debate.id)"
-                >
-                  {{ deletingId === debate.id ? '삭제 중...' : '삭제' }}
-                </button>
-              </div>
-            </div>
-          </article>
+            전체
+          </button>
+          <button
+            type="button"
+            class="tab-btn"
+            :class="{ active: statusFilter === 'upcoming' }"
+            @click="statusFilter = 'upcoming'"
+          >
+            예정
+          </button>
+          <button
+            type="button"
+            class="tab-btn"
+            :class="{ active: statusFilter === 'completed' }"
+            @click="statusFilter = 'completed'"
+          >
+            완료
+          </button>
         </div>
-        <p v-else class="section-empty">예정된 토론이 없습니다.</p>
+
+        <label class="sort-box">
+          <span>정렬</span>
+          <select v-model="sortBy">
+            <option value="date-asc">날짜 오름차순</option>
+            <option value="date-desc">날짜 내림차순</option>
+          </select>
+        </label>
+
+        <div v-if="isAdmin" class="manage-box">
+          <button type="button" class="manage-btn" @click="goToCreatePage">토론 등록</button>
+        </div>
       </section>
 
-      <section v-if="statusFilter === 'all'" class="list-section">
-        <div class="section-head">
-          <h2>지난 토론</h2>
-          <span>{{ completedDebates.length }}건</span>
-        </div>
-        <div v-if="completedDebates.length > 0" class="debate-grid">
-          <article
-            v-for="debate in completedDebates"
-            :key="debate.id"
-            class="debate-card completed"
-          >
-            <div class="card-top">
-              <div class="card-badges">
-                <span class="status-chip completed">완료</span>
-                <span class="type-chip" :class="debateTypeClass(debate.debateType)">
-                  {{ debate.debateType }}
-                </span>
-              </div>
-              <time>{{ formatDate(debate.date) }}</time>
-            </div>
-            <h3>{{ debate.topic }}</h3>
-            <p class="card-meta">
-              {{ dateDistanceLabel(debate.date) }} · 찬성 {{ debate.participantsBySide.pro.length }}명 · 반대
-              {{ debate.participantsBySide.con.length }}명
-            </p>
-            <div class="side-participants">
-              <div class="side-row">
-                <span class="side-pill pro">찬성</span>
-                <div class="participants">
-                  <span v-for="name in participantPreviewBySide(debate, 'pro')" :key="`${debate.id}-pro-${name}`">
-                    {{ name }}
-                  </span>
-                  <span v-if="participantOverflowBySide(debate, 'pro') > 0" class="overflow">
-                    +{{ participantOverflowBySide(debate, 'pro') }}
-                  </span>
-                </div>
-              </div>
-              <div class="side-row">
-                <span class="side-pill con">반대</span>
-                <div class="participants">
-                  <span v-for="name in participantPreviewBySide(debate, 'con')" :key="`${debate.id}-con-${name}`">
-                    {{ name }}
-                  </span>
-                  <span v-if="participantOverflowBySide(debate, 'con') > 0" class="overflow">
-                    +{{ participantOverflowBySide(debate, 'con') }}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div v-if="debate.videoUrl || isAdmin" class="card-footer">
-              <a
-                v-if="debate.videoUrl"
-                class="video-link-btn"
-                :href="debate.videoUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-                title="토론 영상 열기"
-                aria-label="토론 영상 열기"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M14 3h7v7" />
-                  <path d="M10 14 21 3" />
-                  <path d="M21 14v5a2 2 0 0 1-2 2h-5" />
-                  <path d="M10 3H5a2 2 0 0 0-2 2v5" />
-                  <path d="M3 21 14 10" />
-                </svg>
-              </a>
-
-              <div v-if="isAdmin" class="card-actions">
-                <button type="button" class="card-action-btn ghost" @click="goToEditPage(debate.id)">
-                  수정
-                </button>
-                <button
-                  type="button"
-                  class="card-action-btn danger"
-                  :disabled="deletingId === debate.id"
-                  @click="removeDebate(debate.id)"
-                >
-                  {{ deletingId === debate.id ? '삭제 중...' : '삭제' }}
-                </button>
-              </div>
-            </div>
-          </article>
-        </div>
-        <p v-else class="section-empty">지난 토론이 없습니다.</p>
+      <section v-if="loading" class="loading-state">
+        <h2>토론 목록을 불러오는 중입니다</h2>
+        <p>잠시만 기다려주세요.</p>
       </section>
 
-      <section v-if="statusFilter !== 'all'" class="list-section">
-        <div class="section-head">
-          <h2>{{ statusFilter === 'upcoming' ? '예정된 토론' : '지난 토론' }}</h2>
-          <span>{{ singleSectionDebates.length }}건</span>
-        </div>
-
-        <div class="debate-grid">
-          <article
-            v-for="debate in singleSectionDebates"
-            :key="debate.id"
-            class="debate-card"
-            :class="debate.status"
-          >
-            <div class="card-top">
-              <div class="card-badges">
-                <span class="status-chip" :class="debate.status">
-                  {{ debate.status === 'upcoming' ? '예정' : '완료' }}
-                </span>
-                <span class="type-chip" :class="debateTypeClass(debate.debateType)">
-                  {{ debate.debateType }}
-                </span>
-              </div>
-              <time>{{ formatDate(debate.date) }}</time>
-            </div>
-            <h3>{{ debate.topic }}</h3>
-            <p class="card-meta">
-              {{ dateDistanceLabel(debate.date) }} · 찬성 {{ debate.participantsBySide.pro.length }}명 · 반대
-              {{ debate.participantsBySide.con.length }}명
-            </p>
-            <div class="side-participants">
-              <div class="side-row">
-                <span class="side-pill pro">찬성</span>
-                <div class="participants">
-                  <span v-for="name in participantPreviewBySide(debate, 'pro')" :key="`${debate.id}-pro-${name}`">
-                    {{ name }}
-                  </span>
-                  <span v-if="participantOverflowBySide(debate, 'pro') > 0" class="overflow">
-                    +{{ participantOverflowBySide(debate, 'pro') }}
-                  </span>
-                </div>
-              </div>
-              <div class="side-row">
-                <span class="side-pill con">반대</span>
-                <div class="participants">
-                  <span v-for="name in participantPreviewBySide(debate, 'con')" :key="`${debate.id}-con-${name}`">
-                    {{ name }}
-                  </span>
-                  <span v-if="participantOverflowBySide(debate, 'con') > 0" class="overflow">
-                    +{{ participantOverflowBySide(debate, 'con') }}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div v-if="debate.videoUrl || isAdmin" class="card-footer">
-              <a
-                v-if="debate.videoUrl"
-                class="video-link-btn"
-                :href="debate.videoUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-                title="토론 영상 열기"
-                aria-label="토론 영상 열기"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M14 3h7v7" />
-                  <path d="M10 14 21 3" />
-                  <path d="M21 14v5a2 2 0 0 1-2 2h-5" />
-                  <path d="M10 3H5a2 2 0 0 0-2 2v5" />
-                  <path d="M3 21 14 10" />
-                </svg>
-              </a>
-
-              <div v-if="isAdmin" class="card-actions">
-                <button type="button" class="card-action-btn ghost" @click="goToEditPage(debate.id)">
-                  수정
-                </button>
-                <button
-                  type="button"
-                  class="card-action-btn danger"
-                  :disabled="deletingId === debate.id"
-                  @click="removeDebate(debate.id)"
-                >
-                  {{ deletingId === debate.id ? '삭제 중...' : '삭제' }}
-                </button>
-              </div>
-            </div>
-          </article>
-        </div>
+      <section v-else-if="loadError" class="error-state">
+        <h2>토론 목록을 불러오지 못했습니다</h2>
+        <p>{{ loadError }}</p>
+        <button type="button" class="retry-btn" @click="loadDebates">다시 불러오기</button>
       </section>
+
+      <section v-else-if="!hasAnyResult" class="empty-state">
+        <h2>조건에 맞는 토론이 없습니다</h2>
+        <p>검색어 또는 필터를 조정해 다시 확인해보세요.</p>
+      </section>
+
+      <template v-else>
+        <section v-if="statusFilter === 'all'" class="list-section">
+          <div class="section-head">
+            <h2>예정된 토론</h2>
+            <span>{{ upcomingDebates.length }}건</span>
+          </div>
+          <div v-if="upcomingDebates.length > 0" class="debate-grid">
+            <article
+              v-for="debate in upcomingDebates"
+              :key="debate.id"
+              class="debate-card upcoming"
+            >
+              <div class="card-top">
+                <div class="card-badges">
+                  <span class="status-chip upcoming">예정</span>
+                  <span class="type-chip" :class="debateTypeClass(debate.debateType)">
+                    {{ debate.debateType }}
+                  </span>
+                </div>
+                <time>{{ formatDate(debate.date) }}</time>
+              </div>
+              <h3>{{ debate.topic }}</h3>
+              <p class="card-meta">
+                {{ dateDistanceLabel(debate.date) }} · 찬성
+                {{ debate.participantsBySide.pro.length }}명 · 반대
+                {{ debate.participantsBySide.con.length }}명
+              </p>
+              <div class="side-participants">
+                <div class="side-row">
+                  <span class="side-pill pro">찬성</span>
+                  <span v-if="debate.winnerSide === 'pro'" class="win-mark">승</span>
+                  <div class="participants">
+                    <span
+                      v-for="name in participantPreviewBySide(debate, 'pro')"
+                      :key="`${debate.id}-pro-${name}`"
+                    >
+                      {{ name }}
+                    </span>
+                    <span v-if="participantOverflowBySide(debate, 'pro') > 0" class="overflow">
+                      +{{ participantOverflowBySide(debate, 'pro') }}
+                    </span>
+                  </div>
+                </div>
+                <div class="side-row">
+                  <span class="side-pill con">반대</span>
+                  <span v-if="debate.winnerSide === 'con'" class="win-mark">승</span>
+                  <div class="participants">
+                    <span
+                      v-for="name in participantPreviewBySide(debate, 'con')"
+                      :key="`${debate.id}-con-${name}`"
+                    >
+                      {{ name }}
+                    </span>
+                    <span v-if="participantOverflowBySide(debate, 'con') > 0" class="overflow">
+                      +{{ participantOverflowBySide(debate, 'con') }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div v-if="debate.videoUrl || isAdmin" class="card-footer">
+                <a
+                  v-if="debate.videoUrl"
+                  class="video-link-btn"
+                  :href="debate.videoUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="토론 영상 열기"
+                  aria-label="토론 영상 열기"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M14 3h7v7" />
+                    <path d="M10 14 21 3" />
+                    <path d="M21 14v5a2 2 0 0 1-2 2h-5" />
+                    <path d="M10 3H5a2 2 0 0 0-2 2v5" />
+                    <path d="M3 21 14 10" />
+                  </svg>
+                </a>
+
+                <div v-if="isAdmin" class="card-actions">
+                  <button
+                    type="button"
+                    class="card-action-btn ghost"
+                    @click="goToEditPage(debate.id)"
+                  >
+                    수정
+                  </button>
+                  <button
+                    type="button"
+                    class="card-action-btn danger"
+                    :disabled="deletingId === debate.id"
+                    @click="removeDebate(debate.id)"
+                  >
+                    {{ deletingId === debate.id ? '삭제 중...' : '삭제' }}
+                  </button>
+                </div>
+              </div>
+            </article>
+          </div>
+          <p v-else class="section-empty">예정된 토론이 없습니다.</p>
+        </section>
+
+        <section v-if="statusFilter === 'all'" class="list-section">
+          <div class="section-head">
+            <h2>지난 토론</h2>
+            <span>{{ completedDebates.length }}건</span>
+          </div>
+          <div v-if="completedDebates.length > 0" class="debate-grid">
+            <article
+              v-for="debate in completedDebates"
+              :key="debate.id"
+              class="debate-card completed"
+            >
+              <div class="card-top">
+                <div class="card-badges">
+                  <span class="status-chip completed">완료</span>
+                  <span class="type-chip" :class="debateTypeClass(debate.debateType)">
+                    {{ debate.debateType }}
+                  </span>
+                </div>
+                <time>{{ formatDate(debate.date) }}</time>
+              </div>
+              <h3>{{ debate.topic }}</h3>
+              <p class="card-meta">
+                {{ dateDistanceLabel(debate.date) }} · 찬성
+                {{ debate.participantsBySide.pro.length }}명 · 반대
+                {{ debate.participantsBySide.con.length }}명
+              </p>
+              <div class="side-participants">
+                <div class="side-row">
+                  <span class="side-pill pro">찬성</span>
+                  <span v-if="debate.winnerSide === 'pro'" class="win-mark">승</span>
+                  <div class="participants">
+                    <span
+                      v-for="name in participantPreviewBySide(debate, 'pro')"
+                      :key="`${debate.id}-pro-${name}`"
+                    >
+                      {{ name }}
+                    </span>
+                    <span v-if="participantOverflowBySide(debate, 'pro') > 0" class="overflow">
+                      +{{ participantOverflowBySide(debate, 'pro') }}
+                    </span>
+                  </div>
+                </div>
+                <div class="side-row">
+                  <span class="side-pill con">반대</span>
+                  <span v-if="debate.winnerSide === 'con'" class="win-mark">승</span>
+                  <div class="participants">
+                    <span
+                      v-for="name in participantPreviewBySide(debate, 'con')"
+                      :key="`${debate.id}-con-${name}`"
+                    >
+                      {{ name }}
+                    </span>
+                    <span v-if="participantOverflowBySide(debate, 'con') > 0" class="overflow">
+                      +{{ participantOverflowBySide(debate, 'con') }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div v-if="debate.videoUrl || isAdmin" class="card-footer">
+                <a
+                  v-if="debate.videoUrl"
+                  class="video-link-btn"
+                  :href="debate.videoUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="토론 영상 열기"
+                  aria-label="토론 영상 열기"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M14 3h7v7" />
+                    <path d="M10 14 21 3" />
+                    <path d="M21 14v5a2 2 0 0 1-2 2h-5" />
+                    <path d="M10 3H5a2 2 0 0 0-2 2v5" />
+                    <path d="M3 21 14 10" />
+                  </svg>
+                </a>
+
+                <div v-if="isAdmin" class="card-actions">
+                  <button
+                    type="button"
+                    class="card-action-btn ghost"
+                    @click="goToEditPage(debate.id)"
+                  >
+                    수정
+                  </button>
+                  <button
+                    type="button"
+                    class="card-action-btn danger"
+                    :disabled="deletingId === debate.id"
+                    @click="removeDebate(debate.id)"
+                  >
+                    {{ deletingId === debate.id ? '삭제 중...' : '삭제' }}
+                  </button>
+                </div>
+              </div>
+            </article>
+          </div>
+          <p v-else class="section-empty">지난 토론이 없습니다.</p>
+        </section>
+
+        <section v-if="statusFilter !== 'all'" class="list-section">
+          <div class="section-head">
+            <h2>{{ statusFilter === 'upcoming' ? '예정된 토론' : '지난 토론' }}</h2>
+            <span>{{ singleSectionDebates.length }}건</span>
+          </div>
+
+          <div class="debate-grid">
+            <article
+              v-for="debate in singleSectionDebates"
+              :key="debate.id"
+              class="debate-card"
+              :class="debate.status"
+            >
+              <div class="card-top">
+                <div class="card-badges">
+                  <span class="status-chip" :class="debate.status">
+                    {{ debate.status === 'upcoming' ? '예정' : '완료' }}
+                  </span>
+                  <span class="type-chip" :class="debateTypeClass(debate.debateType)">
+                    {{ debate.debateType }}
+                  </span>
+                </div>
+                <time>{{ formatDate(debate.date) }}</time>
+              </div>
+              <h3>{{ debate.topic }}</h3>
+              <p class="card-meta">
+                {{ dateDistanceLabel(debate.date) }} · 찬성
+                {{ debate.participantsBySide.pro.length }}명 · 반대
+                {{ debate.participantsBySide.con.length }}명
+              </p>
+              <div class="side-participants">
+                <div class="side-row">
+                  <span class="side-pill pro">찬성</span>
+                  <span v-if="debate.winnerSide === 'pro'" class="win-mark">승</span>
+                  <div class="participants">
+                    <span
+                      v-for="name in participantPreviewBySide(debate, 'pro')"
+                      :key="`${debate.id}-pro-${name}`"
+                    >
+                      {{ name }}
+                    </span>
+                    <span v-if="participantOverflowBySide(debate, 'pro') > 0" class="overflow">
+                      +{{ participantOverflowBySide(debate, 'pro') }}
+                    </span>
+                  </div>
+                </div>
+                <div class="side-row">
+                  <span class="side-pill con">반대</span>
+                  <span v-if="debate.winnerSide === 'con'" class="win-mark">승</span>
+                  <div class="participants">
+                    <span
+                      v-for="name in participantPreviewBySide(debate, 'con')"
+                      :key="`${debate.id}-con-${name}`"
+                    >
+                      {{ name }}
+                    </span>
+                    <span v-if="participantOverflowBySide(debate, 'con') > 0" class="overflow">
+                      +{{ participantOverflowBySide(debate, 'con') }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div v-if="debate.videoUrl || isAdmin" class="card-footer">
+                <a
+                  v-if="debate.videoUrl"
+                  class="video-link-btn"
+                  :href="debate.videoUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="토론 영상 열기"
+                  aria-label="토론 영상 열기"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M14 3h7v7" />
+                    <path d="M10 14 21 3" />
+                    <path d="M21 14v5a2 2 0 0 1-2 2h-5" />
+                    <path d="M10 3H5a2 2 0 0 0-2 2v5" />
+                    <path d="M3 21 14 10" />
+                  </svg>
+                </a>
+
+                <div v-if="isAdmin" class="card-actions">
+                  <button
+                    type="button"
+                    class="card-action-btn ghost"
+                    @click="goToEditPage(debate.id)"
+                  >
+                    수정
+                  </button>
+                  <button
+                    type="button"
+                    class="card-action-btn danger"
+                    :disabled="deletingId === debate.id"
+                    @click="removeDebate(debate.id)"
+                  >
+                    {{ deletingId === debate.id ? '삭제 중...' : '삭제' }}
+                  </button>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+      </template>
     </template>
   </div>
 </template>
@@ -346,7 +474,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { deleteDebateItem, listDebateItems, type DebateListItem, type DebateSide } from '@/lib/debates'
+import {
+  deleteDebateItem,
+  listDebateItems,
+  type DebateListItem,
+  type DebateSide,
+} from '@/lib/debates'
+import { fetchMemberStats, type MemberStatsRow } from '@/lib/members'
 import { useAuth } from '@/lib/auth'
 
 type DebateStatus = 'upcoming' | 'completed'
@@ -354,6 +488,59 @@ type DebateListVM = DebateListItem & { status: DebateStatus }
 
 const router = useRouter()
 const { isAdmin } = useAuth()
+
+const viewMode = ref<'debates' | 'stats'>('debates')
+
+const stats = ref<MemberStatsRow[]>([])
+const statsLoading = ref(false)
+const statsLoaded = ref(false)
+const statsError = ref('')
+const statsQuery = ref('')
+
+const loadStats = async () => {
+  statsLoading.value = true
+  statsError.value = ''
+  try {
+    stats.value = await fetchMemberStats()
+    statsLoaded.value = true
+  } catch (error: any) {
+    statsError.value = error?.message || '전적 조회 중 오류가 발생했습니다.'
+    stats.value = []
+  } finally {
+    statsLoading.value = false
+  }
+}
+
+const openStats = () => {
+  viewMode.value = 'stats'
+  if (!statsLoaded.value && !statsLoading.value) {
+    void loadStats()
+  }
+}
+
+const filteredStats = computed(() => {
+  const query = statsQuery.value.trim().toLowerCase()
+  if (!query) return stats.value
+  return stats.value.filter((row) => {
+    return (
+      row.name.toLowerCase().includes(query) ||
+      (row.generation || '').toLowerCase().includes(query) ||
+      (row.major || '').toLowerCase().includes(query)
+    )
+  })
+})
+
+const winRateLabel = (row: MemberStatsRow): string => {
+  if (row.wins + row.losses === 0) return '-'
+  return `${Math.round(row.win_rate * 100)}%`
+}
+
+const rankClass = (index: number): string => {
+  if (index === 0) return 'gold'
+  if (index === 1) return 'silver'
+  if (index === 2) return 'bronze'
+  return ''
+}
 
 const parseYmd = (ymd: string): Date => {
   const [y, m, d] = ymd.split('-').map(Number)
@@ -443,8 +630,12 @@ const sortedDebates = computed(() => {
   return copy
 })
 
-const upcomingDebates = computed(() => sortedDebates.value.filter((debate) => debate.status === 'upcoming'))
-const completedDebates = computed(() => sortedDebates.value.filter((debate) => debate.status === 'completed'))
+const upcomingDebates = computed(() =>
+  sortedDebates.value.filter((debate) => debate.status === 'upcoming'),
+)
+const completedDebates = computed(() =>
+  sortedDebates.value.filter((debate) => debate.status === 'completed'),
+)
 const singleSectionDebates = computed(() => sortedDebates.value)
 const hasAnyResult = computed(() => sortedDebates.value.length > 0)
 
@@ -502,6 +693,146 @@ const debateTypeClass = (debateType: DebateListItem['debateType']): 'free' | 'ss
   margin: 6px 0 0;
   font-size: 14.5px;
   color: #5b6473;
+}
+
+.view-tabs {
+  display: inline-flex;
+  border-radius: 12px;
+  padding: 4px;
+  background: #e7edf6;
+  gap: 3px;
+  margin-bottom: 16px;
+}
+
+.view-tab {
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: #5b6473;
+  padding: 8px 18px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.view-tab.active {
+  background: #ffffff;
+  color: #2d6cdf;
+  font-weight: 700;
+  box-shadow: 0 2px 6px -2px rgba(15, 27, 45, 0.25);
+}
+
+.stats-table-wrap {
+  border-radius: 14px;
+  border: 1px solid rgba(15, 27, 45, 0.07);
+  background: #ffffff;
+  overflow-x: auto;
+}
+
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.stats-table th,
+.stats-table td {
+  text-align: left;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(15, 27, 45, 0.06);
+  color: #0f1b2d;
+  white-space: nowrap;
+}
+
+.stats-table th {
+  color: #5b6473;
+  font-size: 11.5px;
+  font-weight: 700;
+  background: #fafbfd;
+}
+
+.stats-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.stats-table tbody tr:hover {
+  background: #f7faff;
+}
+
+.rank-col {
+  width: 56px;
+}
+
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #edf2f8;
+  color: #5b6473;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.rank-badge.gold {
+  background: #fdf3d7;
+  color: #92600a;
+  border: 1px solid #ecd9a0;
+}
+
+.rank-badge.silver {
+  background: #eef1f5;
+  color: #566374;
+  border: 1px solid #ccd6e0;
+}
+
+.rank-badge.bronze {
+  background: #f9e9dd;
+  color: #8a4f24;
+  border: 1px solid #e4c4a8;
+}
+
+.name-col {
+  font-weight: 600;
+}
+
+.name-col small {
+  margin-left: 6px;
+  color: #5b6473;
+  font-weight: 400;
+  font-size: 11.5px;
+}
+
+.win-col {
+  color: #1d7a57;
+  font-weight: 700;
+}
+
+.loss-col {
+  color: #be123c;
+  font-weight: 700;
+}
+
+.retry-btn.small {
+  height: 40px;
+  align-self: flex-end;
+}
+
+.win-mark {
+  height: 20px;
+  border-radius: 999px;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: #92600a;
+  background: #fdf3d7;
+  border: 1px solid #ecd9a0;
 }
 
 .control-panel {

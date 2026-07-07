@@ -42,6 +42,18 @@ function goToDebateManage() {
   router.push('/record/manage')
 }
 
+function goToMyPage() {
+  menuOpen.value = false
+  mobileMenuOpen.value = false
+  router.push('/mypage')
+}
+
+function goToMemberManage() {
+  menuOpen.value = false
+  mobileMenuOpen.value = false
+  router.push('/admin/members')
+}
+
 function closeMobileMenu() {
   mobileMenuOpen.value = false
 }
@@ -70,8 +82,12 @@ function closeMobileMenu() {
               <span v-if="isAdmin" class="admin-badge">관리자</span>
             </button>
             <div v-if="menuOpen" class="user-dropdown">
+              <button type="button" class="dropdown-item" @click="goToMyPage">마이페이지</button>
               <button v-if="isAdmin" type="button" class="dropdown-item" @click="goToDebateManage">
                 토론 관리
+              </button>
+              <button v-if="isAdmin" type="button" class="dropdown-item" @click="goToMemberManage">
+                회원 관리
               </button>
               <button type="button" class="dropdown-item" @click="onLogout">로그아웃</button>
             </div>
@@ -112,8 +128,12 @@ function closeMobileMenu() {
               {{ displayName(userName) }}
               <span v-if="isAdmin" class="admin-badge">관리자</span>
             </div>
+            <button type="button" class="mobile-link" @click="goToMyPage">마이페이지</button>
             <button v-if="isAdmin" type="button" class="mobile-link" @click="goToDebateManage">
               토론 관리
+            </button>
+            <button v-if="isAdmin" type="button" class="mobile-link" @click="goToMemberManage">
+              회원 관리
             </button>
             <button type="button" class="mobile-link" @click="onLogout">로그아웃</button>
           </template>
