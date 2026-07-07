@@ -297,27 +297,21 @@ export const createReservations = async (
       reserved_by: normalizedReservedBy,
       allow_simultaneous: allowSimultaneous ?? false,
     }
-    try {
-      const authHeaders = await getAuthHeaders()
-      const res = await fetch(`${API_BASE}/reservations`, {
-        method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify(payload),
-      })
-      if (!res.ok) {
-        const msg = await res.text().catch(() => '')
-        // If backend table is missing or server error, store locally as a soft-fallback
-        if (res.status >= 500 || /relation .*reservations.* does not exist/i.test(msg)) {
-          addMemoryReservation(date, name, start, end)
-          continue
-        }
-        throw new Error(msg || `Failed to create reservation (${res.status})`)
+    const authHeaders = await getAuthHeaders()
+    const res = await fetch(`${API_BASE}/reservations`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const msg = await res.text().catch(() => '')
+      if (/relation .*reservations.* does not exist/i.test(msg)) {
+        addMemoryReservation(date, name, start, end)
+        continue
       }
-      invalidateRangeCache()
-    } catch (err) {
-      // Network or unexpected error -> soft-fallback to local memory
-      addMemoryReservation(date, name, start, end)
+      throw new Error(msg || `예약 실패 (${res.status})`)
     }
+    invalidateRangeCache()
   }
 }
 
