@@ -26,7 +26,114 @@
         </div>
       </section>
 
-      <section class="editor">
+      <section class="list">
+        <div class="list-head">
+          <h2>토론 목록</h2>
+          <div class="list-head-tools">
+            <div class="layout-tabs">
+              <button
+                type="button"
+                class="layout-btn"
+                :class="{ active: listLayout === 'card' }"
+                title="카드 보기"
+                aria-label="카드 보기"
+                @click="listLayout = 'card'"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                  <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                  <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                  <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="layout-btn"
+                :class="{ active: listLayout === 'list' }"
+                title="리스트 보기"
+                aria-label="리스트 보기"
+                @click="listLayout = 'list'"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M4 6h16" />
+                  <path d="M4 12h16" />
+                  <path d="M4 18h16" />
+                </svg>
+              </button>
+            </div>
+            <span>{{ debates.length }}건</span>
+          </div>
+        </div>
+
+        <p v-if="loading" class="state-line">목록을 불러오는 중입니다.</p>
+        <p v-else-if="loadError" class="state-line error">{{ loadError }}</p>
+        <p v-else-if="debates.length === 0" class="state-line">등록된 토론이 없습니다.</p>
+
+        <div v-else class="cards" :class="{ 'list-mode': listLayout === 'list' }">
+          <article v-for="debate in debates" :key="debate.id" class="card">
+            <div class="card-head">
+              <div class="chips">
+                <span class="chip type" :class="debate.debateType === 'SSU토론' ? 'ssu' : 'free'">
+                  {{ debate.debateType }}
+                </span>
+                <span class="chip status" :class="debateStatus(debate.date)">
+                  {{ debateStatus(debate.date) === 'upcoming' ? '예정' : '완료' }}
+                </span>
+                <span v-if="debate.winnerSide" class="chip winner" :class="debate.winnerSide">
+                  {{ debate.winnerSide === 'pro' ? '찬성 승' : '반대 승' }}
+                </span>
+              </div>
+              <time>{{ formatDate(debate.date) }}</time>
+            </div>
+
+            <h3>{{ debate.topic }}</h3>
+            <p class="meta">참가자 {{ debate.participants.length }}명</p>
+
+            <div class="side-preview">
+              <div class="side-preview-row">
+                <span class="side-badge pro">찬성</span>
+                <div class="participants">
+                  <span
+                    v-for="name in previewParticipantsBySide(debate, 'pro')"
+                    :key="`${debate.id}-pro-${name}`"
+                  >
+                    {{ name }}
+                  </span>
+                  <span v-if="overflowParticipantsBySide(debate, 'pro') > 0" class="more">
+                    +{{ overflowParticipantsBySide(debate, 'pro') }}
+                  </span>
+                </div>
+              </div>
+
+              <div class="side-preview-row">
+                <span class="side-badge con">반대</span>
+                <div class="participants">
+                  <span
+                    v-for="name in previewParticipantsBySide(debate, 'con')"
+                    :key="`${debate.id}-con-${name}`"
+                  >
+                    {{ name }}
+                  </span>
+                  <span v-if="overflowParticipantsBySide(debate, 'con') > 0" class="more">
+                    +{{ overflowParticipantsBySide(debate, 'con') }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <p v-if="debate.notes" class="notes">{{ debate.notes }}</p>
+
+            <div class="card-actions">
+              <button type="button" class="btn ghost" @click="startEdit(debate)">수정</button>
+              <button type="button" class="btn danger" @click="removeDebate(debate.id)">
+                삭제
+              </button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section ref="editorSection" class="editor">
         <h2>{{ editingId ? '토론 수정' : '새 토론 생성' }}</h2>
         <form class="form" @submit.prevent="submitForm">
           <label>
@@ -174,90 +281,12 @@
           </div>
         </form>
       </section>
-
-      <section class="list">
-        <div class="list-head">
-          <h2>토론 목록</h2>
-          <span>{{ debates.length }}건</span>
-        </div>
-
-        <p v-if="loading" class="state-line">목록을 불러오는 중입니다.</p>
-        <p v-else-if="loadError" class="state-line error">{{ loadError }}</p>
-        <p v-else-if="debates.length === 0" class="state-line">등록된 토론이 없습니다.</p>
-
-        <div v-else class="cards">
-          <article v-for="debate in debates" :key="debate.id" class="card">
-            <div class="card-head">
-              <div class="chips">
-                <span class="chip type" :class="debate.debateType === 'SSU토론' ? 'ssu' : 'free'">
-                  {{ debate.debateType }}
-                </span>
-                <span class="chip status" :class="debateStatus(debate.date)">
-                  {{ debateStatus(debate.date) === 'upcoming' ? '예정' : '완료' }}
-                </span>
-                <span v-if="debate.winnerSide" class="chip winner" :class="debate.winnerSide">
-                  {{ debate.winnerSide === 'pro' ? '찬성 승' : '반대 승' }}
-                </span>
-              </div>
-              <time>{{ formatDate(debate.date) }}</time>
-            </div>
-
-            <h3>{{ debate.topic }}</h3>
-            <p class="meta">
-              참가자 {{ debate.participants.length }}명 · 찬성
-              {{ debate.participantsBySide.pro.length }}명 · 반대
-              {{ debate.participantsBySide.con.length }}명
-            </p>
-
-            <div class="side-preview">
-              <div class="side-preview-row">
-                <span class="side-badge pro">찬성</span>
-                <div class="participants">
-                  <span
-                    v-for="name in previewParticipantsBySide(debate, 'pro')"
-                    :key="`${debate.id}-pro-${name}`"
-                  >
-                    {{ name }}
-                  </span>
-                  <span v-if="overflowParticipantsBySide(debate, 'pro') > 0" class="more">
-                    +{{ overflowParticipantsBySide(debate, 'pro') }}
-                  </span>
-                </div>
-              </div>
-
-              <div class="side-preview-row">
-                <span class="side-badge con">반대</span>
-                <div class="participants">
-                  <span
-                    v-for="name in previewParticipantsBySide(debate, 'con')"
-                    :key="`${debate.id}-con-${name}`"
-                  >
-                    {{ name }}
-                  </span>
-                  <span v-if="overflowParticipantsBySide(debate, 'con') > 0" class="more">
-                    +{{ overflowParticipantsBySide(debate, 'con') }}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <p v-if="debate.notes" class="notes">{{ debate.notes }}</p>
-
-            <div class="card-actions">
-              <button type="button" class="btn ghost" @click="startEdit(debate)">수정</button>
-              <button type="button" class="btn danger" @click="removeDebate(debate.id)">
-                삭제
-              </button>
-            </div>
-          </article>
-        </div>
-      </section>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   createDebateItem,
@@ -273,6 +302,7 @@ import {
   updateDebateItem,
 } from '@/lib/debates'
 import { useAuth } from '@/lib/auth'
+import { useDebateListLayout } from '@/lib/listLayout'
 
 const participantSides: Array<{ key: DebateSide; label: string; placeholder: string }> = [
   { key: 'pro', label: '찬성 측', placeholder: '찬성 측 참가자 이름 검색 또는 직접 입력' },
@@ -280,6 +310,7 @@ const participantSides: Array<{ key: DebateSide; label: string; placeholder: str
 ]
 
 const { isAdmin, isAuthReady } = useAuth()
+const { listLayout } = useDebateListLayout()
 const route = useRoute()
 
 const debates = ref<DebateAdminItem[]>([])
@@ -287,6 +318,7 @@ const loading = ref(true)
 const loadError = ref('')
 const submitting = ref(false)
 const editingId = ref<string | null>(null)
+const editorSection = ref<HTMLElement | null>(null)
 
 const today = new Date()
 today.setHours(0, 0, 0, 0)
@@ -561,6 +593,9 @@ const loadDebates = async () => {
 const startEdit = (debate: DebateAdminItem) => {
   editingId.value = debate.id
   fillForm(debate)
+  void nextTick(() => {
+    editorSection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  })
 }
 
 const applyEditFromQuery = () => {
@@ -1048,11 +1083,55 @@ textarea:focus {
 .list-head {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
 }
 
 .list-head span {
   color: #547564;
+}
+
+.list-head-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.layout-tabs {
+  display: inline-flex;
+  border-radius: 9px;
+  padding: 3px;
+  background: #e8f2ec;
+  gap: 2px;
+}
+
+.layout-btn {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: #4b6b5d;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.layout-btn svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.layout-btn.active {
+  background: #fff;
+  color: #1e7a57;
+  box-shadow: 0 2px 5px -2px rgba(24, 86, 59, 0.3);
 }
 
 .state-line {
@@ -1067,8 +1146,109 @@ textarea:focus {
 .cards {
   margin-top: 0.8rem;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
+  height: 460px;
+  /* auto 대신 scroll: 모드 전환 시 스크롤바 유무로 내부 가로폭이 변하지 않도록 트랙을 항상 확보 */
+  overflow-y: scroll;
+  align-content: start;
+}
+
+@media (max-width: 1024px) {
+  .cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cards.list-mode {
+  grid-template-columns: 1fr;
+  gap: 0.4rem;
+}
+
+.cards.list-mode .card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) auto;
+  grid-template-areas:
+    'head preview actions'
+    'topic preview actions'
+    'meta preview actions'
+    'notes preview actions';
+  column-gap: 1rem;
+  row-gap: 0.1rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: 10px;
+}
+
+.cards.list-mode .card-head {
+  grid-area: head;
+  justify-content: flex-start;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.cards.list-mode .chip {
+  height: 20px;
+  font-size: 0.7rem;
+}
+
+.cards.list-mode .card time {
+  font-size: 0.75rem;
+}
+
+.cards.list-mode .card h3 {
+  grid-area: topic;
+  margin: 0.4rem 0 0.15rem;
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
+.cards.list-mode .meta {
+  grid-area: meta;
+  font-size: 0.78rem;
+}
+
+.cards.list-mode .side-preview {
+  grid-area: preview;
+  align-self: center;
+  margin-top: 0;
+  display: grid;
+  /* 찬성/반대 블록을 절반씩 고정 배치: 인원수(2~3명)와 무관하게 시작 위치 유지 */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+  gap: 0.2rem 1rem;
+}
+
+.cards.list-mode .participants span {
+  padding: 0.1rem 0.45rem;
+  font-size: 0.72rem;
+}
+
+.cards.list-mode .side-badge {
+  height: 20px;
+  font-size: 0.68rem;
+}
+
+.cards.list-mode .notes {
+  grid-area: notes;
+  margin-top: 0.1rem;
+  font-size: 0.78rem;
+}
+
+.cards.list-mode .card-actions {
+  grid-area: actions;
+  align-self: center;
+  margin-top: 0;
+}
+
+.cards.list-mode .card-actions .btn {
+  height: 30px;
+  font-size: 0.82rem;
 }
 
 .card {
@@ -1246,6 +1426,25 @@ textarea:focus {
   .participant-head {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .list-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+  }
+
+  .cards.list-mode .card {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'head'
+      'topic'
+      'meta'
+      'preview'
+      'notes'
+      'actions';
+    row-gap: 0.45rem;
+    padding: 0.9rem;
   }
 }
 </style>

@@ -27,6 +27,11 @@
     sans-serif;
 }
 
+html {
+  /* 페이지 높이 변화(뷰 전환 등)로 창 스크롤바가 생겼다 사라지며 가로폭이 흔들리지 않도록 항상 표시 */
+  overflow-y: scroll;
+}
+
 body {
   margin: 0;
   background: linear-gradient(135deg, #f0f7ff, #ffffff);
