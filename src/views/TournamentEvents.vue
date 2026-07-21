@@ -895,7 +895,9 @@ async function refreshSummaries() {
 function addTeam() {
   const used = new Set(draftTeams.map((team) => team.group_name))
   const group =
-    ['A', 'B', 'C', 'D'].find((name) => !used.has(name)) ?? draftTeams.at(-1)?.group_name ?? 'A'
+    ['A', 'B', 'C', 'D'].find((name) => !used.has(name)) ??
+    draftTeams[draftTeams.length - 1]?.group_name ??
+    'A'
   const key = uniqueKey()
   draftTeams.push({ client_key: key, name: '', group_name: group, members: [] })
   memberPicker[key] = ''
