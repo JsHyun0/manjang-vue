@@ -194,7 +194,13 @@
               class="team-editor-card"
             >
               <div class="team-editor-head">
-                <span class="group-badge">{{ team.group_name || '?' }}조</span>
+                <div class="team-card-title">
+                  <span class="group-badge">{{ team.group_name || '?' }}조</span>
+                  <div>
+                    <strong>{{ team.name || `새 팀 ${teamIndex + 1}` }}</strong>
+                    <span>팀 정보와 참가 인원을 설정하세요.</span>
+                  </div>
+                </div>
                 <button
                   type="button"
                   class="icon-button"
@@ -205,36 +211,65 @@
                 </button>
               </div>
               <div class="team-inputs">
-                <label><span>팀명</span><input v-model="team.name" placeholder="팀명" /></label>
-                <label
-                  ><span>조</span><input v-model="team.group_name" maxlength="6" placeholder="A"
-                /></label>
+                <label class="team-name-field">
+                  <span>팀명</span>
+                  <input v-model="team.name" placeholder="팀명을 입력하세요" />
+                </label>
+                <label class="team-group-field">
+                  <span>조</span>
+                  <div class="group-input-wrap">
+                    <input v-model="team.group_name" maxlength="6" placeholder="A" />
+                    <em>조</em>
+                  </div>
+                </label>
               </div>
-              <div class="member-add-row">
-                <select
-                  v-model="memberPicker[team.client_key]"
-                  :disabled="availableMembers.length === 0"
-                >
-                  <option value="">참가 회원 선택</option>
-                  <option v-for="member in availableMembers" :key="member.id" :value="member.id">
-                    {{ member.name }} · {{ member.student_id }} ·
-                    {{ member.generation || member.major }}
-                  </option>
-                </select>
-                <button type="button" class="button soft small" @click="addPickedMember(team)">
-                  등록
-                </button>
+              <div class="member-picker-box">
+                <div class="member-section-title">
+                  <div>
+                    <strong>팀원 추가</strong>
+                    <span>회원 명단에서 참가자를 선택하세요.</span>
+                  </div>
+                </div>
+                <div class="member-add-row">
+                  <select
+                    v-model="memberPicker[team.client_key]"
+                    :disabled="availableMembers.length === 0"
+                    aria-label="추가할 팀원 선택"
+                  >
+                    <option value="">참가 회원 선택</option>
+                    <option v-for="member in availableMembers" :key="member.id" :value="member.id">
+                      {{ member.name }} · {{ member.student_id }} ·
+                      {{ member.generation || member.major }}
+                    </option>
+                  </select>
+                  <button
+                    type="button"
+                    class="button dark small member-add-button"
+                    :disabled="!memberPicker[team.client_key]"
+                    @click="addPickedMember(team)"
+                  >
+                    + 팀원 추가
+                  </button>
+                </div>
               </div>
               <div class="team-members-editor">
+                <div class="member-list-head">
+                  <strong>등록된 팀원</strong>
+                  <span>{{ team.members.length }}명</span>
+                </div>
                 <p v-if="team.members.length === 0" class="empty-line">등록된 팀원이 없습니다.</p>
                 <div v-for="member in team.members" :key="member.user_id" class="member-edit-row">
-                  <div>
-                    <strong>{{ member.name }}</strong
-                    ><small>{{ member.major || '학과 미입력' }}</small>
+                  <span class="member-avatar" aria-hidden="true">{{ member.name?.charAt(0) }}</span>
+                  <div class="member-profile">
+                    <strong>{{ member.name }}</strong>
+                    <small>{{ member.major || '학과 미입력' }}</small>
                   </div>
-                  <label>
-                    <span>경력</span>
-                    <select v-model.number="member.experience_score">
+                  <label class="experience-control">
+                    <span>경력 점수</span>
+                    <select
+                      v-model.number="member.experience_score"
+                      :aria-label="`${member.name} 경력 점수`"
+                    >
                       <option :value="1">1점</option>
                       <option :value="2">2점</option>
                       <option :value="3">3점</option>
@@ -243,6 +278,7 @@
                   <button
                     type="button"
                     class="icon-button"
+                    :aria-label="`${member.name} 팀에서 제외`"
                     @click="removeMember(team, member.user_id)"
                   >
                     ×
@@ -250,7 +286,8 @@
                 </div>
               </div>
               <footer>
-                평균 경력 점수 <strong>{{ draftTeamExperience(team) }}</strong>
+                <span>팀 평균 경력 점수</span>
+                <strong>{{ draftTeamExperience(team) }}</strong>
               </footer>
             </article>
           </div>
@@ -1479,25 +1516,57 @@ textarea {
 .team-editor-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 14px;
+  gap: 18px;
 }
 .team-editor-card {
-  border: 1px solid #dedbd2;
-  border-radius: 11px;
-  padding: 16px;
-  background: #fdfcf9;
+  border: 1px solid #ddd9cf;
+  border-radius: 14px;
+  padding: 20px;
+  background: #fff;
+  box-shadow: 0 12px 28px -28px rgba(29, 47, 39, 0.55);
 }
 .team-editor-head {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #eeeae2;
+}
+.team-card-title {
+  min-width: 0;
+  display: flex;
   align-items: center;
+  gap: 11px;
+}
+.team-card-title > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.team-card-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #1f3029;
+  font-size: 15px;
+}
+.team-card-title > div > span {
+  color: #8a928e;
+  font-size: 10px;
 }
 .group-badge {
+  flex: 0 0 auto;
+  min-width: 38px;
+  height: 30px;
+  display: grid;
+  place-items: center;
   background: #20342c;
   color: white;
-  padding: 4px 9px;
+  padding: 0 10px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
 }
 .icon-button {
@@ -1512,74 +1581,179 @@ textarea {
 }
 .team-inputs {
   display: grid;
-  grid-template-columns: 1fr 70px;
-  gap: 9px;
-  margin: 13px 0;
+  grid-template-columns: minmax(0, 1fr) 104px;
+  gap: 12px;
+  margin: 18px 0;
 }
 .team-inputs label {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-}
-.member-add-row {
-  display: flex;
   gap: 7px;
 }
-.team-members-editor {
-  margin-top: 10px;
+.team-inputs input {
+  height: 42px;
+  background: white;
+}
+.group-input-wrap {
+  position: relative;
+}
+.group-input-wrap input {
+  padding-right: 33px;
+  text-transform: uppercase;
+}
+.group-input-wrap em {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  color: #727d77;
+  font-size: 12px;
+  font-style: normal;
+  pointer-events: none;
+}
+.member-picker-box {
+  border: 1px solid #e5e1d8;
+  border-radius: 10px;
+  padding: 13px;
+  background: #f8f7f3;
+}
+.member-section-title,
+.member-list-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.member-section-title > div {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
+}
+.member-section-title strong,
+.member-list-head strong {
+  color: #2b3b34;
+  font-size: 11px;
+}
+.member-section-title span {
+  color: #8a928e;
+  font-size: 10px;
+}
+.member-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-top: 10px;
+}
+.member-add-row select {
+  height: 40px;
+  min-width: 0;
+  background: white;
+}
+.member-add-button {
+  min-width: 92px;
+  height: 40px;
+  white-space: nowrap;
+}
+.team-members-editor {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.member-list-head {
+  margin-bottom: 1px;
+}
+.member-list-head > span {
+  min-width: 31px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #edf1ee;
+  color: #53625b;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 750;
 }
 .member-edit-row {
   display: grid;
-  grid-template-columns: 1fr auto 29px;
+  grid-template-columns: 34px minmax(0, 1fr) auto 29px;
   align-items: center;
-  gap: 8px;
-  background: white;
+  gap: 10px;
+  background: #fcfbf8;
   border: 1px solid #e7e3db;
-  border-radius: 8px;
-  padding: 7px 8px;
+  border-radius: 10px;
+  padding: 9px 10px;
 }
-.member-edit-row div {
+.member-avatar {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #e8eeeb;
+  color: #294037;
+  font-size: 12px;
+  font-weight: 850;
+}
+.member-profile {
+  min-width: 0;
   display: flex;
   flex-direction: column;
+  gap: 2px;
+}
+.member-profile strong,
+.member-profile small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.member-profile strong {
+  color: #1e2e27;
+  font-size: 13px;
 }
 .member-edit-row small {
   color: #89918d;
   font-size: 10px;
 }
-.member-edit-row label {
+.experience-control {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 7px;
 }
-.member-edit-row label span {
+.experience-control span {
   font-size: 10px;
   color: #7a837e;
+  white-space: nowrap;
 }
-.member-edit-row select {
-  width: 67px;
-  padding: 5px;
+.experience-control select {
+  width: 66px;
+  height: 34px;
+  padding: 5px 8px;
+  background: white;
 }
 .team-editor-card footer {
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px dashed #ddd8cf;
-  text-align: right;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 9px;
+  background: #fff2ed;
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 8px;
+  color: #68736d;
   font-size: 11px;
-  color: #75807a;
 }
 .team-editor-card footer strong {
   color: #ff5b35;
-  font-size: 15px;
-  margin-left: 5px;
+  font-size: 18px;
 }
 .empty-line {
   text-align: center;
   color: #969c99;
   font-size: 11px;
-  padding: 9px;
+  padding: 18px 12px;
+  border: 1px dashed #dcd8cf;
+  border-radius: 9px;
+  background: #faf9f6;
 }
 .empty-editor {
   border: 1px dashed #d6d1c7;
@@ -2307,6 +2481,36 @@ textarea {
   .team-editor-grid,
   .roster-grid {
     grid-template-columns: 1fr;
+  }
+  .team-editor-card {
+    padding: 16px;
+  }
+  .team-card-title > div > span {
+    display: none;
+  }
+  .team-inputs {
+    grid-template-columns: minmax(0, 1fr) 88px;
+  }
+  .member-add-row {
+    grid-template-columns: 1fr;
+  }
+  .member-add-button {
+    width: 100%;
+  }
+  .member-edit-row {
+    grid-template-columns: 34px minmax(0, 1fr) 29px;
+  }
+  .experience-control {
+    grid-column: 2 / 4;
+    justify-content: space-between;
+    padding-top: 7px;
+    border-top: 1px solid #eeeae2;
+  }
+  .experience-control select {
+    width: 76px;
+  }
+  .team-editor-card footer {
+    justify-content: space-between;
   }
   .schedule-edit-row {
     grid-template-columns: 72px 1fr 30px;
