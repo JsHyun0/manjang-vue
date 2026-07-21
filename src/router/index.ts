@@ -9,6 +9,7 @@ import Timer from '../views/Timer.vue'
 import Reservation from '../views/Reservation.vue'
 import Record from '../views/Record.vue'
 import DebateManage from '../views/DebateManage.vue'
+import TournamentEvents from '../views/TournamentEvents.vue'
 import { useAuth } from '../lib/auth'
 
 const router = createRouter({
@@ -57,6 +58,11 @@ const router = createRouter({
       path: '/reservation',
       name: 'Reservation',
       component: Reservation,
+    },
+    {
+      path: '/events',
+      name: 'TournamentEvents',
+      component: TournamentEvents,
     },
     {
       path: '/record',

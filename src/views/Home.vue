@@ -121,6 +121,13 @@ const features: Feature[] = [
     to: '/reservation',
   },
   {
+    icon: '🏆',
+    title: '이벤트 대회',
+    desc: '조 편성부터 경기 일정, 실시간 순위와 결과까지 한눈에',
+    link: '대회 현황 보기',
+    to: '/events',
+  },
+  {
     icon: '📚',
     title: '토론 기록',
     desc: '주제, 참가자, 결과까지. 지난 토론을 다시 펼쳐보세요',
@@ -389,7 +396,7 @@ const features: Feature[] = [
 
 .features {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 14px;
 }
 
