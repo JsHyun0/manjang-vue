@@ -1613,19 +1613,28 @@ textarea {
   color: #ff5b35;
 }
 .match-versus {
-  display: flex;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  column-gap: 10px;
+  width: 100%;
   min-width: 0;
 }
 .match-versus strong {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
 }
+.match-versus strong:first-child {
+  text-align: right;
+}
+.match-versus strong:last-child {
+  text-align: left;
+}
 .match-versus span {
+  justify-self: center;
   font-size: 9px;
   color: #9aa09c;
 }
