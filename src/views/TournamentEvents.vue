@@ -327,8 +327,16 @@
                 <span>VS</span>
                 <strong>{{ draftTeamName(match.team_b_key, match.team_b_source_group) }}</strong>
               </div>
-              <input v-model="match.starts_at" type="datetime-local" aria-label="경기 시작 시간" />
-              <input v-model="match.venue" placeholder="장소" aria-label="경기 장소" />
+              <div class="schedule-fields">
+                <label class="schedule-field schedule-time-field">
+                  <span>시작 시간</span>
+                  <input v-model="match.starts_at" type="datetime-local" />
+                </label>
+                <label class="schedule-field">
+                  <span>장소</span>
+                  <input v-model="match.venue" placeholder="장소를 입력하세요" />
+                </label>
+              </div>
               <button
                 type="button"
                 class="icon-button"
@@ -1771,12 +1779,12 @@ textarea {
 }
 .schedule-edit-row {
   display: grid;
-  grid-template-columns: 86px 1fr 180px 150px 30px;
-  gap: 9px;
+  grid-template-columns: 74px minmax(180px, 1fr) minmax(370px, 430px) 30px;
+  gap: 12px;
   align-items: center;
   border: 1px solid #e2ded5;
-  border-radius: 9px;
-  padding: 9px;
+  border-radius: 11px;
+  padding: 11px 12px;
 }
 .match-kind {
   font-size: 10px;
@@ -1811,6 +1819,32 @@ textarea {
   justify-self: center;
   font-size: 9px;
   color: #9aa09c;
+}
+.schedule-fields {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(230px, 1.55fr) minmax(130px, 1fr);
+  gap: 9px;
+}
+.schedule-field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.schedule-field > span {
+  color: #77817c;
+  font-size: 9px;
+  font-weight: 750;
+}
+.schedule-field input {
+  min-width: 0;
+  height: 40px;
+  padding: 8px 10px;
+  background: #fff;
+}
+.schedule-time-field input {
+  font-variant-numeric: tabular-nums;
 }
 .sticky-save {
   margin-top: 22px;
@@ -2420,10 +2454,13 @@ textarea {
     grid-template-columns: repeat(2, 1fr);
   }
   .schedule-edit-row {
-    grid-template-columns: 82px 1fr 160px 30px;
+    grid-template-columns: 82px minmax(0, 1fr) 30px;
   }
-  .schedule-edit-row input:nth-of-type(2) {
-    grid-column: 2 / 4;
+  .schedule-fields {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(250px, 1.55fr) minmax(150px, 1fr);
+    padding-top: 10px;
+    border-top: 1px solid #eeeae2;
   }
   .match-card {
     grid-template-columns: 140px 1fr;
@@ -2515,11 +2552,8 @@ textarea {
   .schedule-edit-row {
     grid-template-columns: 72px 1fr 30px;
   }
-  .schedule-edit-row input {
-    grid-column: 1 / 4;
-  }
-  .schedule-edit-row input:nth-of-type(2) {
-    grid-column: 1 / 4;
+  .schedule-fields {
+    grid-template-columns: 1fr;
   }
   .sticky-save {
     align-items: stretch;
