@@ -54,12 +54,6 @@ function goToMemberManage() {
   router.push('/admin/members')
 }
 
-function goToTournamentManage() {
-  menuOpen.value = false
-  mobileMenuOpen.value = false
-  router.push({ path: '/events', query: { manage: '1' } })
-}
-
 function closeMobileMenu() {
   mobileMenuOpen.value = false
 }
@@ -79,7 +73,6 @@ function closeMobileMenu() {
           >
           <router-link to="/reservation" class="nav-link">예약</router-link>
           <router-link to="/record" class="nav-link">토론 목록</router-link>
-          <router-link to="/events" class="nav-link event-link"><span />이벤트 대회</router-link>
 
           <router-link v-if="!isLoggedIn" to="/login" class="login-pill">로그인</router-link>
 
@@ -95,14 +88,6 @@ function closeMobileMenu() {
               </button>
               <button v-if="isAdmin" type="button" class="dropdown-item" @click="goToMemberManage">
                 회원 관리
-              </button>
-              <button
-                v-if="isAdmin"
-                type="button"
-                class="dropdown-item"
-                @click="goToTournamentManage"
-              >
-                대회 운영
               </button>
               <button type="button" class="dropdown-item" @click="onLogout">로그아웃</button>
             </div>
@@ -130,9 +115,6 @@ function closeMobileMenu() {
           <router-link to="/record" class="mobile-link" @click="closeMobileMenu"
             >토론 목록</router-link
           >
-          <router-link to="/events" class="mobile-link" @click="closeMobileMenu"
-            >이벤트 대회</router-link
-          >
           <div class="mobile-divider" />
           <router-link
             v-if="!isLoggedIn"
@@ -152,9 +134,6 @@ function closeMobileMenu() {
             </button>
             <button v-if="isAdmin" type="button" class="mobile-link" @click="goToMemberManage">
               회원 관리
-            </button>
-            <button v-if="isAdmin" type="button" class="mobile-link" @click="goToTournamentManage">
-              대회 운영
             </button>
             <button type="button" class="mobile-link" @click="onLogout">로그아웃</button>
           </template>
@@ -239,19 +218,6 @@ function closeMobileMenu() {
   height: 2px;
   background: #2d6cdf;
   border-radius: 2px;
-}
-
-.event-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.event-link > span {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #ff5b35;
 }
 
 .login-pill {
