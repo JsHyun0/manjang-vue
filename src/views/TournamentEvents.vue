@@ -686,8 +686,8 @@ const emptyForm = (): TournamentInput => ({
   topic: '',
   description: '',
   debate_format: '자유토론',
-  starts_on: koreaDatetimeInput(new Date().toISOString()).slice(0, 10),
-  ends_on: koreaDatetimeInput(new Date().toISOString()).slice(0, 10),
+  starts_on: new Date().toISOString().slice(0, 10),
+  ends_on: new Date().toISOString().slice(0, 10),
   venue: '',
   status: 'draft',
   points_per_win: 1,
@@ -726,24 +726,17 @@ const standingsByGroup = computed(() => {
 const matchesByDay = computed(() => {
   const grouped = new Map<string, TournamentMatch[]>()
   for (const match of event.value?.matches ?? []) {
-    const date = koreaDatetimeInput(match.starts_at).slice(0, 10)
+    const date = match.starts_at.slice(0, 10)
     const list = grouped.get(date) ?? []
     list.push(match)
     grouped.set(date, list)
   }
   return [...grouped.entries()].map(([date, matches]) => {
-    const value = new Date(`${date}T00:00:00+09:00`)
+    const value = new Date(`${date}T00:00:00`)
     return {
       date,
-      label: new Intl.DateTimeFormat('ko-KR', {
-        timeZone: 'Asia/Seoul',
-        month: 'long',
-        day: 'numeric',
-      }).format(value),
-      weekday: new Intl.DateTimeFormat('ko-KR', {
-        timeZone: 'Asia/Seoul',
-        weekday: 'short',
-      }).format(value),
+      label: new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(value),
+      weekday: new Intl.DateTimeFormat('ko-KR', { weekday: 'short' }).format(value),
       matches,
     }
   })
@@ -752,9 +745,9 @@ const dDayLabel = computed(() => {
   if (!event.value) return ''
   if (event.value.status === 'completed') return 'CLOSED'
   if (event.value.status === 'ongoing') return 'LIVE'
-  const todayInKorea = koreaDatetimeInput(new Date().toISOString()).slice(0, 10)
-  const today = new Date(`${todayInKorea}T00:00:00+09:00`)
-  const start = new Date(`${event.value.starts_on}T00:00:00+09:00`)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const start = new Date(`${event.value.starts_on}T00:00:00`)
   const days = Math.ceil((start.getTime() - today.getTime()) / 86400000)
   return days > 0 ? `D-${days}` : days === 0 ? 'D-DAY' : 'READY'
 })
@@ -765,17 +758,15 @@ function statusLabel(status: TournamentStatus) {
 function formatDateRange(start: string, end: string) {
   const format = (date: string) =>
     new Intl.DateTimeFormat('ko-KR', {
-      timeZone: 'Asia/Seoul',
       year: 'numeric',
       month: 'long',
       day: 'numeric',
       weekday: 'short',
-    }).format(new Date(`${date}T00:00:00+09:00`))
+    }).format(new Date(`${date}T00:00:00`))
   return start === end ? format(start) : `${format(start)} – ${format(end)}`
 }
 function formatTime(value: string) {
   return new Intl.DateTimeFormat('ko-KR', {
-    timeZone: 'Asia/Seoul',
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
@@ -784,19 +775,10 @@ function formatTime(value: string) {
 function displayScore(score: number | null) {
   return score === null ? '–' : Number(score).toFixed(Number(score) % 1 ? 1 : 0)
 }
-function koreaDatetimeInput(value: string) {
+function localDatetime(value: string) {
   const date = new Date(value)
-  const korea = new Date(date.getTime() + 9 * 60 * 60000)
-  return korea.toISOString().slice(0, 16)
-}
-function koreaInputToIso(value: string) {
-  const trimmed = value.trim()
-  if (!trimmed) return trimmed
-  const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(trimmed)
-  const withSeconds = trimmed.length === 16 ? `${trimmed}:00` : trimmed
-  const date = new Date(hasTimezone ? withSeconds : `${withSeconds}+09:00`)
-  if (Number.isNaN(date.getTime())) throw new Error('경기 시작 시간을 확인해주세요.')
-  return date.toISOString()
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 16)
 }
 function uniqueKey(prefix = 'team') {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
@@ -842,7 +824,7 @@ function hydrateDraft(detail: TournamentDetail) {
     ...detail.matches.map((match) => ({
       stage: match.stage,
       round_label: match.round_label,
-      starts_at: koreaDatetimeInput(match.starts_at),
+      starts_at: localDatetime(match.starts_at),
       venue: match.venue,
       team_a_key: detail.teams.find((team) => team.id === match.team_a_id)?.client_key ?? null,
       team_b_key: detail.teams.find((team) => team.id === match.team_b_id)?.client_key ?? null,
@@ -1146,12 +1128,12 @@ function generateSchedule() {
     let game = 1
     for (let i = 0; i < teams.length; i++)
       for (let j = i + 1; j < teams.length; j++) {
-        const date = new Date(`${eventForm.starts_on}T10:00:00+09:00`)
+        const date = new Date(`${eventForm.starts_on}T10:00:00`)
         date.setMinutes(date.getMinutes() + offset * 55)
         matches.push({
           stage: 'group',
           round_label: `${group}조 경기 ${game++}`,
-          starts_at: koreaDatetimeInput(date.toISOString()),
+          starts_at: localDatetime(date.toISOString()),
           venue: eventForm.venue,
           team_a_key: teams[i].client_key,
           team_b_key: teams[j].client_key,
@@ -1205,7 +1187,7 @@ async function submitSetup() {
           experience_score: member.experience_score,
         })),
       })),
-      draftMatches.map((match) => ({ ...match, starts_at: koreaInputToIso(match.starts_at) })),
+      draftMatches.map((match) => ({ ...match })),
     )
     hydrateDraft(event.value)
     await refreshSummaries()
